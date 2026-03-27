@@ -1,0 +1,11 @@
+services:
+  app:
+    build: .
+    ports:
+      - "80:80"
+    volumes:
+      - share-data:/data
+    restart: unless-stopped
+
+volumes:
+  share-data:
