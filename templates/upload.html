@@ -5,33 +5,32 @@
 {{define "body"}}
 <nav class="nav">
   <div class="nav-left">
-    <a href="/" class="nav-logo">S</a>
-    <a href="/" class="nav-brand">share.</a>
+    <a href="/" class="logo"><span class="logo-text">share<span class="logo-dot">.</span></span></a>
   </div>
 </nav>
 <div class="container">
-  <h2 style="margin-bottom:20px;">Upload a document</h2>
-  {{if .Error}}<p style="color:red;margin-bottom:12px;">{{.Error}}</p>{{end}}
+  <h2 class="page-heading">Upload a document</h2>
+  {{if .Error}}<div class="form-error">{{.Error}}</div>{{end}}
   <form method="post" action="/upload" enctype="multipart/form-data">
     <div class="form-group">
-      <label for="title">Title</label>
-      <input type="text" id="title" name="title" class="form-input" required maxlength="200">
+      <label for="title" class="form-label">Title <span class="form-hint">max 200 characters</span></label>
+      <input type="text" id="title" name="title" class="form-input" required maxlength="200" placeholder="e.g. Kenya Trade Analysis Q1 2026">
     </div>
     <div class="form-group">
-      <label for="format">Format</label>
+      <label for="format" class="form-label">Format</label>
       <select id="format" name="format" class="form-select">
         <option value="html">HTML</option>
         <option value="md">Markdown</option>
       </select>
     </div>
     <div class="form-group">
-      <label for="content">Content</label>
-      <textarea id="content" name="content" class="form-input form-textarea" required></textarea>
+      <label for="content" class="form-label">Content <span class="form-hint">max 5 MB</span></label>
+      <textarea id="content" name="content" class="form-input form-textarea" required placeholder="Paste HTML or Markdown content..."></textarea>
     </div>
     <div class="form-group">
       <label class="form-toggle">
         <input type="checkbox" name="private" value="1">
-        Make private
+        Private — visible only via direct link
       </label>
     </div>
     <button type="submit" class="btn">Publish</button>

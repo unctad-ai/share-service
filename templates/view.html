@@ -5,12 +5,12 @@
 {{define "body"}}
 <nav class="nav">
   <div class="nav-left">
-    <a href="/" class="nav-logo">S</a>
+    <a href="/" class="logo"><span class="logo-text">s<span class="logo-dot">.</span></span></a>
     <span class="nav-title">{{.Doc.Title}}</span>
   </div>
   <div class="nav-right">
     <span>{{.Doc.CreatedAt | formatdate}}</span>
-    <a href="/d/{{.Doc.ID}}/raw" class="nav-link">Raw</a>
+    <a href="/d/{{.Doc.ID}}/raw" class="nav-link">Source</a>
   </div>
 </nav>
 <iframe class="viewer-frame" sandbox="allow-scripts" srcdoc="{{.Content}}"></iframe>

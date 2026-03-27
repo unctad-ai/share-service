@@ -5,23 +5,22 @@
 {{define "body"}}
 <nav class="nav">
   <div class="nav-left">
-    <a href="/" class="nav-logo">S</a>
-    <a href="/" class="nav-brand">share.</a>
+    <a href="/" class="logo"><span class="logo-text">share<span class="logo-dot">.</span></span></a>
   </div>
   <a href="/upload" class="btn">Upload</a>
 </nav>
 <div class="container">
   <form method="get" action="/">
-    <input type="text" name="q" class="search-box" placeholder="Search documents..." value="{{.Query}}">
+    <input type="text" name="q" class="search-box" placeholder="Search by title..." value="{{.Query}}">
   </form>
   {{if .Documents}}
   <div class="doc-list">
     {{range .Documents}}
     <a href="/d/{{.ID}}" class="doc-item">
-      <span class="doc-dot {{.Format}}"></span>
+      <span class="doc-format {{.Format}}">{{.Format | upper}}</span>
       <div class="doc-info">
         <div class="doc-title">{{.Title}}</div>
-        <div class="doc-meta">{{.Format | upper}} · {{.SizeBytes | filesize}} · {{.CreatedAt | timeago}}</div>
+        <div class="doc-meta">{{.SizeBytes | filesize}} · {{.CreatedAt | timeago}}</div>
       </div>
     </a>
     {{end}}
@@ -33,7 +32,11 @@
   </div>
   {{end}}
   {{else}}
-  <div class="empty">No documents yet.</div>
+  <div class="empty">
+    <div class="empty-heading">Nothing published yet</div>
+    <div class="empty-text">Documents shared via the API or uploaded here will appear in this feed.</div>
+    <a href="/upload" class="btn-ghost btn">Upload a document</a>
+  </div>
   {{end}}
 </div>
 {{end}}
