@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 )
 
 func main() {
@@ -13,11 +14,17 @@ func main() {
 	baseURL := flag.String("base-url", "http://localhost", "public base URL for generated links")
 	flag.Parse()
 
+	store, err := NewStore(*dataDir)
+	if err != nil {
+		log.Fatalf("init store: %v", err)
+	}
+	defer store.Close()
+
+	limiter := NewRateLimiter(10, time.Minute)
+	handlers := NewHandlers(store, limiter, *baseURL)
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok"}`))
-	})
+	handlers.RegisterAPI(mux)
 
 	addr := fmt.Sprintf(":%d", *port)
 	log.Printf("share-service starting on %s (data=%s, base-url=%s)", addr, *dataDir, *baseURL)
