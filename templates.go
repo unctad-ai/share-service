@@ -19,7 +19,11 @@ var staticFS embed.FS
 
 var md = goldmark.New()
 
-func loadTemplates() *template.Template {
+type Templates struct {
+	pages map[string]*template.Template
+}
+
+func loadTemplates() *Templates {
 	funcMap := template.FuncMap{
 		"upper": strings.ToUpper,
 		"filesize": func(b int) string {
@@ -63,7 +67,22 @@ func loadTemplates() *template.Template {
 		},
 	}
 
-	return template.Must(template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html"))
+	base := template.Must(template.New("base.html").Funcs(funcMap).ParseFS(templateFS, "templates/base.html"))
+
+	pageNames := []string{"home.html", "view.html", "created.html", "upload.html"}
+	pages := make(map[string]*template.Template, len(pageNames))
+
+	for _, name := range pageNames {
+		t := template.Must(base.Clone())
+		template.Must(t.ParseFS(templateFS, "templates/"+name))
+		pages[name] = t
+	}
+
+	return &Templates{pages: pages}
+}
+
+func (t *Templates) Render(w interface{ Write([]byte) (int, error) }, name string, data any) {
+	t.pages[name].ExecuteTemplate(w, name, data)
 }
 
 func renderMarkdown(source []byte) (string, error) {
@@ -71,16 +90,16 @@ func renderMarkdown(source []byte) (string, error) {
 	if err := md.Convert(source, &buf); err != nil {
 		return "", err
 	}
-	// Wrap in a basic readable stylesheet
 	return `<!DOCTYPE html><html><head><style>
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:48rem;margin:2rem auto;padding:0 1rem;line-height:1.6;color:#262626}
-h1,h2,h3{margin:1.5em 0 0.5em}
-pre{background:#f5f5f5;padding:1rem;border-radius:8px;overflow-x:auto}
-code{font-size:0.9em;background:#f5f5f5;padding:2px 6px;border-radius:4px}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;max-width:48rem;margin:2rem auto;padding:0 1rem;line-height:1.7;color:#1a1d26}
+h1,h2,h3{margin:1.5em 0 0.5em;letter-spacing:-0.01em}
+pre{background:#eef0f4;padding:1rem;border-radius:6px;overflow-x:auto}
+code{font-size:0.9em;background:#eef0f4;padding:2px 6px;border-radius:4px}
 pre code{background:none;padding:0}
 table{border-collapse:collapse;width:100%}
-th,td{border:1px solid #e5e5e5;padding:8px 12px;text-align:left}
+th,td{border:1px solid #d8dae2;padding:8px 12px;text-align:left}
 img{max-width:100%}
-blockquote{border-left:3px solid #e5e5e5;margin:1em 0;padding:0.5em 1em;color:#525252}
+blockquote{border-left:3px solid #d8dae2;margin:1em 0;padding:0.5em 1em;color:#3d4155}
+a{color:#2d5be3}
 </style></head><body>` + buf.String() + `</body></html>`, nil
 }

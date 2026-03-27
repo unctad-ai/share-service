@@ -316,7 +316,7 @@ func jsonError(w http.ResponseWriter, message string, code int) {
 	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
-func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *template.Template) {
+func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *Templates) {
 	staticSub, _ := fs.Sub(staticFS, "static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
 
@@ -339,7 +339,7 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *template.Template) {
 
 		totalPages := int(math.Ceil(float64(total) / float64(limit)))
 
-		tmpl.ExecuteTemplate(w, "home.html", map[string]any{
+		tmpl.Render(w, "home.html", map[string]any{
 			"Documents": docs,
 			"Query":     query,
 			"Page":      page,
@@ -375,7 +375,7 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *template.Template) {
 			htmlContent = string(content)
 		}
 
-		tmpl.ExecuteTemplate(w, "view.html", map[string]any{
+		tmpl.Render(w, "view.html", map[string]any{
 			"Doc":     doc,
 			"Content": template.HTMLAttr(html.EscapeString(htmlContent)),
 		})
@@ -400,19 +400,19 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *template.Template) {
 	})
 
 	mux.HandleFunc("GET /upload", func(w http.ResponseWriter, r *http.Request) {
-		tmpl.ExecuteTemplate(w, "upload.html", nil)
+		tmpl.Render(w, "upload.html", nil)
 	})
 
 	mux.HandleFunc("POST /upload", func(w http.ResponseWriter, r *http.Request) {
 		ip := clientIP(r)
 		if !h.limiter.Allow(ip) {
-			tmpl.ExecuteTemplate(w, "upload.html", map[string]any{"Error": "Rate limit exceeded. Try again in a minute."})
+			tmpl.Render(w, "upload.html", map[string]any{"Error": "Rate limit exceeded. Try again in a minute."})
 			return
 		}
 
 		r.Body = http.MaxBytesReader(w, r.Body, maxContentSize+4096)
 		if err := r.ParseMultipartForm(maxContentSize); err != nil {
-			tmpl.ExecuteTemplate(w, "upload.html", map[string]any{"Error": "Content too large (max 5 MB)."})
+			tmpl.Render(w, "upload.html", map[string]any{"Error": "Content too large (max 5 MB)."})
 			return
 		}
 
@@ -425,22 +425,22 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *template.Template) {
 		}
 
 		if title == "" || (format != "html" && format != "md") || content == "" {
-			tmpl.ExecuteTemplate(w, "upload.html", map[string]any{"Error": "Title, format, and content are required."})
+			tmpl.Render(w, "upload.html", map[string]any{"Error": "Title, format, and content are required."})
 			return
 		}
 		if len(title) > maxTitleLen {
-			tmpl.ExecuteTemplate(w, "upload.html", map[string]any{"Error": "Title too long (max 200 chars)."})
+			tmpl.Render(w, "upload.html", map[string]any{"Error": "Title too long (max 200 chars)."})
 			return
 		}
 
 		doc, secret, err := h.store.Create(title, format, []byte(content), visibility)
 		if err != nil {
-			tmpl.ExecuteTemplate(w, "upload.html", map[string]any{"Error": "Failed to save document."})
+			tmpl.Render(w, "upload.html", map[string]any{"Error": "Failed to save document."})
 			return
 		}
 
 		url := fmt.Sprintf("%s/d/%s", h.baseURL, doc.ID)
-		tmpl.ExecuteTemplate(w, "created.html", map[string]any{
+		tmpl.Render(w, "created.html", map[string]any{
 			"URL":    url,
 			"Secret": secret,
 		})
