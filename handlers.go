@@ -27,6 +27,9 @@ func NewHandlers(store *Store, limiter *RateLimiter, baseURL string) *Handlers {
 
 func (h *Handlers) RegisterAPI(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", h.handleHealth)
+	mux.HandleFunc("POST /api/register", h.handleRegister)
+	mux.HandleFunc("GET /api/me", h.handleMe)
+	mux.HandleFunc("GET /api/me/documents", h.handleMyDocs)
 	mux.HandleFunc("POST /api/documents", h.handlePublish)
 	mux.HandleFunc("GET /api/documents/{id}", h.handleGetDoc)
 	mux.HandleFunc("DELETE /api/documents/{id}", h.handleDeleteDoc)
@@ -37,6 +40,79 @@ func (h *Handlers) RegisterAPI(mux *http.ServeMux) {
 func (h *Handlers) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"ok"}`))
+}
+
+func (h *Handlers) handleRegister(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+	if !h.limiter.Allow(ip) {
+		w.Header().Set("Retry-After", "60")
+		jsonError(w, "rate limit exceeded", 429)
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	pub, token, err := h.store.Register(req.Name)
+	if err != nil {
+		jsonError(w, "internal error", 500)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	json.NewEncoder(w).Encode(map[string]any{
+		"publisher_id": pub.ID,
+		"token":        token,
+		"name":         pub.Name,
+		"created_at":   pub.CreatedAt.Format("2006-01-02T15:04:05Z"),
+	})
+}
+
+func (h *Handlers) handleMe(w http.ResponseWriter, r *http.Request) {
+	pub := h.authenticatePublisher(r)
+	if pub == nil {
+		jsonError(w, "unauthorized — provide Authorization: Bearer <token>", 401)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(pub)
+}
+
+func (h *Handlers) handleMyDocs(w http.ResponseWriter, r *http.Request) {
+	pub := h.authenticatePublisher(r)
+	if pub == nil {
+		jsonError(w, "unauthorized — provide Authorization: Bearer <token>", 401)
+		return
+	}
+
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	docs, total, err := h.store.ListByPublisher(pub.ID, page, limit)
+	if err != nil {
+		jsonError(w, "internal error", 500)
+		return
+	}
+	if docs == nil {
+		docs = []Document{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"documents": docs,
+		"total":     total,
+		"page":      page,
+	})
 }
 
 func (h *Handlers) handlePublish(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +168,12 @@ func (h *Handlers) handlePublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	doc, secret, err := h.store.Create(req.Title, req.Format, []byte(req.Content), req.Visibility)
+	var publisherID string
+	if pub := h.authenticatePublisher(r); pub != nil {
+		publisherID = pub.ID
+	}
+
+	doc, secret, err := h.store.CreateWithPublisher(req.Title, req.Format, []byte(req.Content), req.Visibility, publisherID)
 	if err != nil {
 		jsonError(w, "internal error", 500)
 		return
@@ -132,7 +213,12 @@ func (h *Handlers) handleDeleteDoc(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	secret := r.Header.Get("X-Secret")
 
-	err := h.store.Delete(id, secret)
+	var publisherID string
+	if pub := h.authenticatePublisher(r); pub != nil {
+		publisherID = pub.ID
+	}
+
+	err := h.store.Delete(id, secret, publisherID)
 	if err == ErrNotFound {
 		jsonError(w, "not found", 404)
 		return
@@ -153,6 +239,11 @@ func (h *Handlers) handlePatchDoc(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	secret := r.Header.Get("X-Secret")
 
+	var publisherID string
+	if pub := h.authenticatePublisher(r); pub != nil {
+		publisherID = pub.ID
+	}
+
 	var req struct {
 		Title      *string `json:"title"`
 		Visibility *string `json:"visibility"`
@@ -171,7 +262,7 @@ func (h *Handlers) handlePatchDoc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.store.Update(id, secret, &UpdateParams{Title: req.Title, Visibility: req.Visibility})
+	err := h.store.Update(id, secret, publisherID, &UpdateParams{Title: req.Title, Visibility: req.Visibility})
 	if err == ErrNotFound {
 		jsonError(w, "not found", 404)
 		return
@@ -354,6 +445,19 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *template.Template) {
 			"Secret": secret,
 		})
 	})
+}
+
+func (h *Handlers) authenticatePublisher(r *http.Request) *Publisher {
+	auth := r.Header.Get("Authorization")
+	if !strings.HasPrefix(auth, "Bearer ") {
+		return nil
+	}
+	token := strings.TrimPrefix(auth, "Bearer ")
+	pub, err := h.store.GetPublisher(token)
+	if err != nil {
+		return nil
+	}
+	return pub
 }
 
 func clientIP(r *http.Request) string {

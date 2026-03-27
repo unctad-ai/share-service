@@ -293,3 +293,185 @@ func TestAPIHealth(t *testing.T) {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 }
+
+// Publisher API tests
+
+func TestAPIRegister(t *testing.T) {
+	srv, _ := testServer(t)
+	defer srv.Close()
+
+	body := `{"name":"Test Bot"}`
+	resp, err := http.Post(srv.URL+"/api/register", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 201, got %d: %s", resp.StatusCode, b)
+	}
+
+	var result struct {
+		PublisherID string `json:"publisher_id"`
+		Token       string `json:"token"`
+		Name        string `json:"name"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if result.PublisherID == "" || result.Token == "" {
+		t.Fatalf("missing fields: %+v", result)
+	}
+	if result.Name != "Test Bot" {
+		t.Fatalf("expected name 'Test Bot', got %q", result.Name)
+	}
+	if !strings.HasPrefix(result.Token, "tok_") {
+		t.Fatalf("expected tok_ prefix: %q", result.Token)
+	}
+}
+
+func TestAPIRegisterEmptyName(t *testing.T) {
+	srv, _ := testServer(t)
+	defer srv.Close()
+
+	resp, _ := http.Post(srv.URL+"/api/register", "application/json", strings.NewReader(`{}`))
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected 201 with empty name, got %d", resp.StatusCode)
+	}
+}
+
+func TestAPIMe(t *testing.T) {
+	srv, store := testServer(t)
+	defer srv.Close()
+
+	pub, token, _ := store.Register("Me Bot")
+
+	req, _ := http.NewRequest("GET", srv.URL+"/api/me", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, _ := http.DefaultClient.Do(req)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result Publisher
+	json.NewDecoder(resp.Body).Decode(&result)
+	if result.ID != pub.ID {
+		t.Fatalf("expected %q, got %q", pub.ID, result.ID)
+	}
+}
+
+func TestAPIMeUnauthorized(t *testing.T) {
+	srv, _ := testServer(t)
+	defer srv.Close()
+
+	resp, _ := http.Get(srv.URL + "/api/me")
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 401 {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
+func TestAPIMyDocs(t *testing.T) {
+	srv, store := testServer(t)
+	defer srv.Close()
+
+	pub, token, _ := store.Register("Docs Bot")
+	store.CreateWithPublisher("My Doc", "html", []byte("<p>mine</p>"), "public", pub.ID)
+	store.CreateWithPublisher("My Private", "md", []byte("# private"), "private", pub.ID)
+	store.Create("Other Doc", "html", []byte("<p>other</p>"), "public")
+
+	req, _ := http.NewRequest("GET", srv.URL+"/api/me/documents", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, _ := http.DefaultClient.Do(req)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Documents []Document `json:"documents"`
+		Total     int        `json:"total"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if result.Total != 2 {
+		t.Fatalf("expected 2 docs (including private), got %d", result.Total)
+	}
+}
+
+func TestAPIPublishWithToken(t *testing.T) {
+	srv, store := testServer(t)
+	defer srv.Close()
+
+	pub, token, _ := store.Register("Publish Bot")
+
+	body := `{"title":"Token Doc","format":"html","content":"<p>hi</p>"}`
+	req, _ := http.NewRequest("POST", srv.URL+"/api/documents", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, _ := http.DefaultClient.Do(req)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 201, got %d: %s", resp.StatusCode, b)
+	}
+
+	var result struct {
+		ID string `json:"id"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	doc, _ := store.Get(result.ID)
+	if doc.PublisherID != pub.ID {
+		t.Fatalf("expected publisher_id %q, got %q", pub.ID, doc.PublisherID)
+	}
+}
+
+func TestAPIDeleteWithToken(t *testing.T) {
+	srv, store := testServer(t)
+	defer srv.Close()
+
+	pub, token, _ := store.Register("Del Bot")
+	doc, _, _ := store.CreateWithPublisher("To Delete", "html", []byte("<p>bye</p>"), "public", pub.ID)
+
+	req, _ := http.NewRequest("DELETE", srv.URL+"/api/documents/"+doc.ID, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, _ := http.DefaultClient.Do(req)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 204 {
+		t.Fatalf("expected 204, got %d", resp.StatusCode)
+	}
+}
+
+func TestAPIPatchWithToken(t *testing.T) {
+	srv, store := testServer(t)
+	defer srv.Close()
+
+	pub, token, _ := store.Register("Patch Bot")
+	doc, _, _ := store.CreateWithPublisher("Original", "html", []byte("<p>hi</p>"), "public", pub.ID)
+
+	body := `{"title":"Updated via Token"}`
+	req, _ := http.NewRequest("PATCH", srv.URL+"/api/documents/"+doc.ID, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, _ := http.DefaultClient.Do(req)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, b)
+	}
+
+	got, _ := store.Get(doc.ID)
+	if got.Title != "Updated via Token" {
+		t.Fatalf("expected 'Updated via Token', got %q", got.Title)
+	}
+}
