@@ -1,0 +1,17 @@
+{{template "base.html" .}}
+
+{{define "title"}}{{.Doc.Title}} — share.{{end}}
+
+{{define "body"}}
+<nav class="nav">
+  <div class="nav-left">
+    <a href="/" class="nav-logo">S</a>
+    <span class="nav-title">{{.Doc.Title}}</span>
+  </div>
+  <div class="nav-right">
+    <span>{{.Doc.CreatedAt | formatdate}}</span>
+    <a href="/d/{{.Doc.ID}}/raw" class="nav-link">Raw</a>
+  </div>
+</nav>
+<iframe class="viewer-frame" sandbox="allow-scripts" srcdoc="{{.Content}}"></iframe>
+{{end}}

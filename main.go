@@ -23,8 +23,11 @@ func main() {
 	limiter := NewRateLimiter(10, time.Minute)
 	handlers := NewHandlers(store, limiter, *baseURL)
 
+	tmpl := loadTemplates()
+
 	mux := http.NewServeMux()
 	handlers.RegisterAPI(mux)
+	handlers.RegisterWeb(mux, tmpl)
 
 	addr := fmt.Sprintf(":%d", *port)
 	log.Printf("share-service starting on %s (data=%s, base-url=%s)", addr, *dataDir, *baseURL)

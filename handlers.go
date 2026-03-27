@@ -3,6 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html"
+	"html/template"
+	"io/fs"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -219,6 +223,137 @@ func jsonError(w http.ResponseWriter, message string, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(map[string]string{"error": message})
+}
+
+func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *template.Template) {
+	staticSub, _ := fs.Sub(staticFS, "static")
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
+
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		if page < 1 {
+			page = 1
+		}
+		query := r.URL.Query().Get("q")
+		limit := 20
+
+		docs, total, err := h.store.List(page, limit, query)
+		if err != nil {
+			http.Error(w, "internal error", 500)
+			return
+		}
+		if docs == nil {
+			docs = []Document{}
+		}
+
+		totalPages := int(math.Ceil(float64(total) / float64(limit)))
+
+		tmpl.ExecuteTemplate(w, "home.html", map[string]any{
+			"Documents": docs,
+			"Query":     query,
+			"Page":      page,
+			"HasPrev":   page > 1,
+			"HasNext":   page < totalPages,
+			"PrevPage":  page - 1,
+			"NextPage":  page + 1,
+		})
+	})
+
+	mux.HandleFunc("GET /d/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		doc, err := h.store.Get(id)
+		if err == ErrNotFound || (err == nil && doc.Visibility == "private") {
+			http.NotFound(w, r)
+			return
+		}
+
+		content, err := h.store.ReadContent(doc.ID, doc.Format)
+		if err != nil {
+			http.Error(w, "internal error", 500)
+			return
+		}
+
+		var htmlContent string
+		if doc.Format == "md" {
+			htmlContent, err = renderMarkdown(content)
+			if err != nil {
+				http.Error(w, "render error", 500)
+				return
+			}
+		} else {
+			htmlContent = string(content)
+		}
+
+		tmpl.ExecuteTemplate(w, "view.html", map[string]any{
+			"Doc":     doc,
+			"Content": template.HTMLAttr(html.EscapeString(htmlContent)),
+		})
+	})
+
+	mux.HandleFunc("GET /d/{id}/raw", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		doc, err := h.store.Get(id)
+		if err == ErrNotFound || (err == nil && doc.Visibility == "private") {
+			http.NotFound(w, r)
+			return
+		}
+
+		content, err := h.store.ReadContent(doc.ID, doc.Format)
+		if err != nil {
+			http.Error(w, "internal error", 500)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write(content)
+	})
+
+	mux.HandleFunc("GET /upload", func(w http.ResponseWriter, r *http.Request) {
+		tmpl.ExecuteTemplate(w, "upload.html", nil)
+	})
+
+	mux.HandleFunc("POST /upload", func(w http.ResponseWriter, r *http.Request) {
+		ip := clientIP(r)
+		if !h.limiter.Allow(ip) {
+			tmpl.ExecuteTemplate(w, "upload.html", map[string]any{"Error": "Rate limit exceeded. Try again in a minute."})
+			return
+		}
+
+		r.Body = http.MaxBytesReader(w, r.Body, maxContentSize+4096)
+		if err := r.ParseMultipartForm(maxContentSize); err != nil {
+			tmpl.ExecuteTemplate(w, "upload.html", map[string]any{"Error": "Content too large (max 5 MB)."})
+			return
+		}
+
+		title := strings.TrimSpace(r.FormValue("title"))
+		format := r.FormValue("format")
+		content := r.FormValue("content")
+		visibility := "public"
+		if r.FormValue("private") == "1" {
+			visibility = "private"
+		}
+
+		if title == "" || (format != "html" && format != "md") || content == "" {
+			tmpl.ExecuteTemplate(w, "upload.html", map[string]any{"Error": "Title, format, and content are required."})
+			return
+		}
+		if len(title) > maxTitleLen {
+			tmpl.ExecuteTemplate(w, "upload.html", map[string]any{"Error": "Title too long (max 200 chars)."})
+			return
+		}
+
+		doc, secret, err := h.store.Create(title, format, []byte(content), visibility)
+		if err != nil {
+			tmpl.ExecuteTemplate(w, "upload.html", map[string]any{"Error": "Failed to save document."})
+			return
+		}
+
+		url := fmt.Sprintf("%s/d/%s", h.baseURL, doc.ID)
+		tmpl.ExecuteTemplate(w, "created.html", map[string]any{
+			"URL":    url,
+			"Secret": secret,
+		})
+	})
 }
 
 func clientIP(r *http.Request) string {
