@@ -13,20 +13,37 @@
   {{if .Error}}<div class="form-error">{{.Error}}</div>{{end}}
   <form method="post" action="/upload" enctype="multipart/form-data">
     <div class="form-group">
-      <label for="title" class="form-label">Title <span class="form-hint">max 200 characters</span></label>
-      <input type="text" id="title" name="title" class="form-input" required maxlength="200" placeholder="e.g. Kenya Trade Analysis Q1 2026">
+      <label for="title" class="form-label">Title <span class="form-hint">optional if uploading a file — defaults to filename</span></label>
+      <input type="text" id="title" name="title" class="form-input" maxlength="200" placeholder="e.g. Kenya Trade Analysis Q1 2026">
     </div>
+
     <div class="form-group">
-      <label for="format" class="form-label">Format</label>
-      <select id="format" name="format" class="form-select">
-        <option value="html">HTML</option>
-        <option value="md">Markdown</option>
-      </select>
+      <div class="tab-bar">
+        <button type="button" class="tab active" data-tab="file" onclick="switchTab('file')">Upload file</button>
+        <button type="button" class="tab" data-tab="paste" onclick="switchTab('paste')">Paste content</button>
+      </div>
+
+      <div id="tab-file" class="tab-panel">
+        <label class="drop-zone" id="drop-zone">
+          <input type="file" name="file" id="file-input" accept=".html,.htm,.md,.markdown,.txt" class="file-hidden">
+          <span class="drop-icon">+</span>
+          <span class="drop-text" id="drop-text">Drop an .html or .md file, or click to browse</span>
+          <span class="drop-hint">Max 5 MB</span>
+        </label>
+      </div>
+
+      <div id="tab-paste" class="tab-panel" style="display:none">
+        <div class="form-group" style="margin-bottom:12px">
+          <label for="format" class="form-label">Format</label>
+          <select id="format" name="format" class="form-select">
+            <option value="html">HTML</option>
+            <option value="md">Markdown</option>
+          </select>
+        </div>
+        <textarea id="content" name="content" class="form-input form-textarea" placeholder="Paste HTML or Markdown content..."></textarea>
+      </div>
     </div>
-    <div class="form-group">
-      <label for="content" class="form-label">Content <span class="form-hint">max 5 MB</span></label>
-      <textarea id="content" name="content" class="form-input form-textarea" required placeholder="Paste HTML or Markdown content..."></textarea>
-    </div>
+
     <div class="form-group">
       <label class="form-toggle">
         <input type="checkbox" name="private" value="1">
@@ -36,4 +53,27 @@
     <button type="submit" class="btn">Publish</button>
   </form>
 </div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.getElementById('tab-file').style.display = tab === 'file' ? '' : 'none';
+  document.getElementById('tab-paste').style.display = tab === 'paste' ? '' : 'none';
+}
+const zone = document.getElementById('drop-zone');
+const input = document.getElementById('file-input');
+const text = document.getElementById('drop-text');
+['dragenter','dragover'].forEach(e => zone.addEventListener(e, ev => { ev.preventDefault(); zone.classList.add('drag-over'); }));
+['dragleave','drop'].forEach(e => zone.addEventListener(e, ev => { ev.preventDefault(); zone.classList.remove('drag-over'); }));
+zone.addEventListener('drop', ev => { input.files = ev.dataTransfer.files; showFile(); });
+input.addEventListener('change', showFile);
+function showFile() {
+  if (input.files.length) {
+    text.textContent = input.files[0].name;
+    zone.classList.add('has-file');
+  }
+}
+</script>
 {{end}}

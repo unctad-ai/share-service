@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"math"
 	"net/http"
@@ -417,14 +418,45 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *Templates) {
 
 		title := strings.TrimSpace(r.FormValue("title"))
 		format := r.FormValue("format")
-		content := r.FormValue("content")
 		visibility := "public"
 		if r.FormValue("private") == "1" {
 			visibility = "private"
 		}
 
+		// Try file upload first, fall back to pasted content
+		var content string
+		file, header, err := r.FormFile("file")
+		if err == nil {
+			defer file.Close()
+			data, err := io.ReadAll(io.LimitReader(file, maxContentSize+1))
+			if err != nil {
+				tmpl.Render(w, "upload.html", map[string]any{"Error": "Failed to read file."})
+				return
+			}
+			if len(data) > maxContentSize {
+				tmpl.Render(w, "upload.html", map[string]any{"Error": "File too large (max 5 MB)."})
+				return
+			}
+			content = string(data)
+
+			// Auto-detect format from file extension
+			name := strings.ToLower(header.Filename)
+			if strings.HasSuffix(name, ".md") || strings.HasSuffix(name, ".markdown") {
+				format = "md"
+			} else {
+				format = "html"
+			}
+
+			// Use filename as title if not provided
+			if title == "" {
+				title = strings.TrimSuffix(strings.TrimSuffix(header.Filename, ".html"), ".md")
+			}
+		} else {
+			content = r.FormValue("content")
+		}
+
 		if title == "" || (format != "html" && format != "md") || content == "" {
-			tmpl.Render(w, "upload.html", map[string]any{"Error": "Title, format, and content are required."})
+			tmpl.Render(w, "upload.html", map[string]any{"Error": "Provide a file or paste content, and include a title."})
 			return
 		}
 		if len(title) > maxTitleLen {

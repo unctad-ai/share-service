@@ -214,6 +214,79 @@ body {
   margin: 0 auto 20px;
 }
 
+/* ---- Tabs ---- */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--stone-200);
+}
+.tab {
+  padding: 8px 16px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--stone-600);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color 0.12s, border-color 0.12s;
+}
+.tab:hover { color: var(--ink); }
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ---- Drop zone ---- */
+.drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 20px;
+  border: 2px dashed var(--stone-200);
+  border-radius: var(--radius);
+  background: var(--white);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+.drop-zone.has-file {
+  border-style: solid;
+  border-color: var(--success);
+  background: #edf8f3;
+}
+.file-hidden {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+.drop-icon {
+  font-size: 24px;
+  font-weight: 300;
+  color: var(--stone-400);
+  line-height: 1;
+}
+.drop-zone.has-file .drop-icon { color: var(--success); }
+.drop-text {
+  font-size: 14px;
+  color: var(--ink-secondary);
+}
+.drop-hint {
+  font-size: 12px;
+  color: var(--stone-400);
+}
+.drop-zone.has-file .drop-hint { display: none; }
+
 /* ---- Upload form ---- */
 .form-group { margin-bottom: 20px; }
 .form-label {
