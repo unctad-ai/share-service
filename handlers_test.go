@@ -147,9 +147,9 @@ func TestAPIGetPrivateDoc(t *testing.T) {
 	resp, _ := http.Get(srv.URL + "/api/documents/" + doc.ID)
 	defer resp.Body.Close()
 
-	// Private docs return 404, not 403
-	if resp.StatusCode != 404 {
-		t.Fatalf("expected 404 for private doc, got %d", resp.StatusCode)
+	// Private (unlisted) docs are accessible via direct link, just not in listings
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200 for private doc via direct link, got %d", resp.StatusCode)
 	}
 }
 

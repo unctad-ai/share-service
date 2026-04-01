@@ -216,10 +216,6 @@ func (h *Handlers) handleGetDoc(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "internal error", 500)
 		return
 	}
-	if doc.Visibility == "private" {
-		jsonError(w, "not found", 404)
-		return
-	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(doc)
@@ -369,7 +365,7 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *Templates) {
 	mux.HandleFunc("GET /d/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		doc, err := h.store.Get(id)
-		if err == ErrNotFound || (err == nil && doc.Visibility == "private") {
+		if err == ErrNotFound {
 			http.NotFound(w, r)
 			return
 		}
@@ -403,7 +399,7 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *Templates) {
 	mux.HandleFunc("GET /d/{id}/raw", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		doc, err := h.store.Get(id)
-		if err == ErrNotFound || (err == nil && doc.Visibility == "private") {
+		if err == ErrNotFound {
 			http.NotFound(w, r)
 			return
 		}
