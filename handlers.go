@@ -160,7 +160,7 @@ func (h *Handlers) handlePublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Visibility == "" {
-		req.Visibility = "public"
+		req.Visibility = "private"
 	}
 	if req.Visibility != "public" && req.Visibility != "private" {
 		jsonError(w, "visibility must be 'public' or 'private'", 400)
@@ -184,6 +184,7 @@ func (h *Handlers) handlePublish(w http.ResponseWriter, r *http.Request) {
 		"id":         doc.ID,
 		"url":        fmt.Sprintf("%s/d/%s", h.baseURL, doc.ID),
 		"secret":     secret,
+		"visibility": doc.Visibility,
 		"created_at": doc.CreatedAt.Format("2006-01-02T15:04:05Z"),
 	})
 }

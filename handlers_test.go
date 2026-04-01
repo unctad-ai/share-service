@@ -51,6 +51,33 @@ func TestAPIPublish(t *testing.T) {
 	}
 }
 
+func TestAPIPublishDefaultsToPrivate(t *testing.T) {
+	srv, _ := testServer(t)
+	defer srv.Close()
+
+	body := `{"title":"Default Visibility","format":"html","content":"<p>test</p>"}`
+	resp, err := http.Post(srv.URL+"/api/documents", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 201, got %d: %s", resp.StatusCode, b)
+	}
+
+	var result struct {
+		ID         string `json:"id"`
+		Visibility string `json:"visibility"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if result.Visibility != "private" {
+		t.Fatalf("expected visibility 'private', got %q", result.Visibility)
+	}
+}
+
 func TestAPIPublishValidation(t *testing.T) {
 	srv, _ := testServer(t)
 	defer srv.Close()

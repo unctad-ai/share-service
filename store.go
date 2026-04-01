@@ -74,7 +74,7 @@ func NewStore(dataDir string) (*Store, error) {
 			id           TEXT PRIMARY KEY,
 			title        TEXT NOT NULL,
 			format       TEXT NOT NULL CHECK(format IN ('html', 'md')),
-			visibility   TEXT NOT NULL DEFAULT 'public' CHECK(visibility IN ('public', 'private')),
+			visibility   TEXT NOT NULL DEFAULT 'private' CHECK(visibility IN ('public', 'private')),
 			secret_hash  TEXT NOT NULL,
 			size_bytes   INTEGER NOT NULL,
 			publisher_id TEXT REFERENCES publishers(id),
