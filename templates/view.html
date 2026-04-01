@@ -10,8 +10,23 @@
   </div>
   <div class="nav-right">
     <span>{{.Doc.CreatedAt | formatdate}}</span>
-    <a href="/d/{{.Doc.ID}}/raw" class="nav-link">Source</a>
+    <button class="nav-toggle" onclick="toggleSource()" id="sourceToggle">Source</button>
   </div>
 </nav>
-<iframe class="viewer-frame" sandbox="allow-scripts" srcdoc="{{.Content}}"></iframe>
+<iframe class="viewer-frame" id="rendered" sandbox="allow-scripts" srcdoc="{{.Content}}"></iframe>
+<pre class="viewer-source" id="source">{{.Content}}</pre>
+{{end}}
+
+{{define "scripts"}}
+<script>
+function toggleSource() {
+  var rendered = document.getElementById('rendered');
+  var source = document.getElementById('source');
+  var btn = document.getElementById('sourceToggle');
+  var showing = source.style.display === 'block';
+  rendered.style.display = showing ? '' : 'none';
+  source.style.display = showing ? 'none' : 'block';
+  btn.textContent = showing ? 'Source' : 'Rendered';
+}
+</script>
 {{end}}

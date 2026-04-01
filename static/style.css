@@ -356,6 +356,36 @@ body {
   height: calc(100vh - 48px);
   border: none;
 }
+.viewer-source {
+  display: none;
+  width: 100%;
+  height: calc(100vh - 48px);
+  margin: 0;
+  padding: 24px;
+  overflow: auto;
+  background: var(--stone-50);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  tab-size: 2;
+}
+.nav-toggle {
+  background: none;
+  border: 1px solid var(--stone-200);
+  border-radius: 5px;
+  padding: 3px 10px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+}
+.nav-toggle:hover {
+  background: var(--stone-50);
+}
 
 /* ---- Confirmation ---- */
 .confirm {
