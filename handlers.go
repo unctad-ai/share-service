@@ -374,9 +374,12 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *Templates) {
 			htmlContent = string(content)
 		}
 
+		rawURL := fmt.Sprintf("%s/d/%s/raw", h.baseURL, doc.ID)
+
 		tmpl.Render(w, "view.html", map[string]any{
 			"Doc":     doc,
 			"Content": htmlContent,
+			"RawURL":  rawURL,
 		})
 	})
 

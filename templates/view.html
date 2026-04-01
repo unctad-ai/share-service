@@ -11,6 +11,7 @@
   <div class="nav-right">
     <span>{{.Doc.CreatedAt | formatdate}}</span>
     <button class="nav-toggle" onclick="toggleSource()" id="sourceToggle">Source</button>
+    <a class="nav-toggle" id="claudeLink" href="claude-cli://open?q=" title="Open in Claude Code">Claude ↗</a>
   </div>
 </nav>
 <iframe class="viewer-frame" id="rendered" sandbox="allow-scripts" srcdoc="{{.Content}}"></iframe>
@@ -28,5 +29,6 @@ function toggleSource() {
   source.style.display = showing ? 'none' : 'block';
   btn.textContent = showing ? 'Source' : 'Rendered';
 }
+document.getElementById('claudeLink').href = 'claude-cli://open?q=' + encodeURIComponent('{{.RawURL}}');
 </script>
 {{end}}
