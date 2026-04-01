@@ -502,3 +502,53 @@ func TestAPIPatchWithToken(t *testing.T) {
 		t.Fatalf("expected 'Updated via Token', got %q", got.Title)
 	}
 }
+
+func TestAPIPublishRejectsSecrets(t *testing.T) {
+	srv, _ := testServer(t)
+	defer srv.Close()
+
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{"AWS key", "<p>key: AKIAIOSFODNN7EXAMPLE</p>"},
+		{"private key", "<p>-----BEGIN RSA PRIVATE KEY-----</p>"},
+		{"password", `<p>config: {"password": "hunter2"}</p>`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := `{"title":"` + tt.name + `","format":"html","content":"` + strings.ReplaceAll(tt.content, `"`, `\"`) + `"}`
+			resp, _ := http.Post(srv.URL+"/api/documents", "application/json", strings.NewReader(body))
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 422 {
+				b, _ := io.ReadAll(resp.Body)
+				t.Fatalf("expected 422, got %d: %s", resp.StatusCode, b)
+			}
+
+			var result struct {
+				Error    string   `json:"error"`
+				Patterns []string `json:"patterns"`
+			}
+			json.NewDecoder(resp.Body).Decode(&result)
+			if result.Error == "" || len(result.Patterns) == 0 {
+				t.Fatalf("expected error with patterns, got: %+v", result)
+			}
+		})
+	}
+}
+
+func TestAPIPublishAllowsCleanContent(t *testing.T) {
+	srv, _ := testServer(t)
+	defer srv.Close()
+
+	body := `{"title":"Clean Doc","format":"html","content":"<h1>Hello World</h1><p>This is safe.</p>"}`
+	resp, _ := http.Post(srv.URL+"/api/documents", "application/json", strings.NewReader(body))
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 201, got %d: %s", resp.StatusCode, b)
+	}
+}

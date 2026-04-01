@@ -159,6 +159,22 @@ func (h *Handlers) handlePublish(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "content too large (max 5 MB)", 413)
 		return
 	}
+
+	// Scan for secrets/credentials
+	if findings := ScanSecrets(req.Content); len(findings) > 0 {
+		var patterns []string
+		for _, f := range findings {
+			patterns = append(patterns, f.Pattern)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(422)
+		json.NewEncoder(w).Encode(map[string]any{
+			"error":    "content contains potentially sensitive data — review and remove secrets before sharing",
+			"patterns": patterns,
+		})
+		return
+	}
+
 	if req.Visibility == "" {
 		req.Visibility = "private"
 	}
