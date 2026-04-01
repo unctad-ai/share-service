@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io"
 	"io/fs"
 	"math"
@@ -377,7 +376,7 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *Templates) {
 
 		tmpl.Render(w, "view.html", map[string]any{
 			"Doc":     doc,
-			"Content": template.HTMLAttr(srcdocEscape(htmlContent)),
+			"Content": htmlContent,
 		})
 	})
 
@@ -478,14 +477,6 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *Templates) {
 	})
 }
 
-// srcdocEscape escapes content for use in an iframe srcdoc attribute.
-// Only quotes and ampersands need escaping; < and > must remain literal
-// so the iframe interprets them as HTML.
-func srcdocEscape(s string) string {
-	s = strings.ReplaceAll(s, "&", "&amp;")
-	s = strings.ReplaceAll(s, "\"", "&quot;")
-	return s
-}
 
 func (h *Handlers) authenticatePublisher(r *http.Request) *Publisher {
 	auth := r.Header.Get("Authorization")
