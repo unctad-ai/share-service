@@ -610,3 +610,76 @@ func TestAPIListFilterProject(t *testing.T) {
 		t.Errorf("expected 'TZ Report', got %q", result.Documents[0].Title)
 	}
 }
+
+func TestFullPublishBrowseFlow(t *testing.T) {
+	srv, _ := testServer(t)
+	defer srv.Close()
+
+	// Register publisher
+	resp, _ := http.Post(srv.URL+"/api/register", "application/json", strings.NewReader(`{"name":"test-agent"}`))
+	var reg map[string]any
+	json.NewDecoder(resp.Body).Decode(&reg)
+	resp.Body.Close()
+	token := reg["token"].(string)
+
+	// Publish with metadata
+	req, _ := http.NewRequest("POST", srv.URL+"/api/documents", strings.NewReader(`{
+		"title":"Tanzania Migration Report",
+		"format":"md",
+		"content":"# Migration\n\n- [ ] Step 1\n\n| Table | Works |\n|---|---|\n| Yes | Yes |",
+		"visibility":"public",
+		"project":"tz",
+		"doc_type":"migration-analysis",
+		"tags":"migration,tanzania"
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, _ = http.DefaultClient.Do(req)
+	var pub map[string]any
+	json.NewDecoder(resp.Body).Decode(&pub)
+	resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		t.Fatalf("publish failed: %d", resp.StatusCode)
+	}
+
+	// Verify document ID returned
+	id, ok := pub["id"].(string)
+	if !ok || id == "" {
+		t.Fatal("expected document ID in response")
+	}
+
+	// List filtered by project
+	resp, _ = http.Get(srv.URL + "/api/documents?project=tz")
+	var list struct {
+		Documents []map[string]any `json:"documents"`
+		Total     int              `json:"total"`
+	}
+	json.NewDecoder(resp.Body).Decode(&list)
+	resp.Body.Close()
+
+	if list.Total != 1 {
+		t.Fatalf("expected 1 doc for project=tz, got %d", list.Total)
+	}
+	if list.Documents[0]["project"] != "tz" {
+		t.Errorf("expected project 'tz', got %v", list.Documents[0]["project"])
+	}
+	if list.Documents[0]["doc_type"] != "migration-analysis" {
+		t.Errorf("expected doc_type 'migration-analysis', got %v", list.Documents[0]["doc_type"])
+	}
+
+	// Verify publisher's documents endpoint
+	req2, _ := http.NewRequest("GET", srv.URL+"/api/me/documents", nil)
+	req2.Header.Set("Authorization", "Bearer "+token)
+	resp, _ = http.DefaultClient.Do(req2)
+	var myDocs struct {
+		Documents []map[string]any `json:"documents"`
+		Total     int              `json:"total"`
+	}
+	json.NewDecoder(resp.Body).Decode(&myDocs)
+	resp.Body.Close()
+
+	if myDocs.Total != 1 {
+		t.Fatalf("expected 1 doc in my documents, got %d", myDocs.Total)
+	}
+}
