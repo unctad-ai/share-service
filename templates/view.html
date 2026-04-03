@@ -14,11 +14,37 @@
     <a class="nav-toggle" id="claudeLink" href="claude-cli://open?q=" title="Open in Claude Code">Claude ↗</a>
   </div>
 </nav>
+{{if eq .Doc.Format "md"}}
+<article class="md-body" id="rendered"></article>
+<pre class="viewer-source" id="source">{{.Content}}</pre>
+{{else}}
 <iframe class="viewer-frame" id="rendered" sandbox="allow-scripts" srcdoc="{{.Content}}"></iframe>
 <pre class="viewer-source" id="source">{{.Content}}</pre>
 {{end}}
+{{end}}
 
 {{define "scripts"}}
+{{if eq .Doc.Format "md"}}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.7/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<script>
+(function() {
+  marked.setOptions({
+    gfm: true,
+    breaks: false,
+    highlight: function(code, lang) {
+      if (lang && hljs.getLanguage(lang)) {
+        return hljs.highlight(code, {language: lang}).value;
+      }
+      return hljs.highlightAuto(code).value;
+    }
+  });
+  var src = document.getElementById('source').textContent;
+  document.getElementById('rendered').innerHTML = marked.parse(src);
+})();
+</script>
+{{end}}
 <script>
 function toggleSource() {
   var rendered = document.getElementById('rendered');

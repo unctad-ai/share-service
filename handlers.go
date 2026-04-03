@@ -376,22 +376,11 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *Templates) {
 			return
 		}
 
-		var htmlContent string
-		if doc.Format == "md" {
-			htmlContent, err = renderMarkdown(content)
-			if err != nil {
-				http.Error(w, "render error", 500)
-				return
-			}
-		} else {
-			htmlContent = string(content)
-		}
-
 		rawURL := fmt.Sprintf("%s/d/%s/raw", h.baseURL, doc.ID)
 
 		tmpl.Render(w, "view.html", map[string]any{
 			"Doc":     doc,
-			"Content": htmlContent,
+			"Content": string(content),
 			"RawURL":  rawURL,
 		})
 	})
