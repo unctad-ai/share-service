@@ -27,18 +27,36 @@ type Publisher struct {
 }
 
 type Document struct {
-	ID          string    `json:"id"`
-	Title       string    `json:"title"`
-	Format      string    `json:"format"`
-	Visibility  string    `json:"visibility"`
-	SizeBytes   int       `json:"size_bytes"`
-	PublisherID string    `json:"publisher_id,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID           string    `json:"id"`
+	Title        string    `json:"title"`
+	Format       string    `json:"format"`
+	Visibility   string    `json:"visibility"`
+	SizeBytes    int       `json:"size_bytes"`
+	PublisherID  string    `json:"publisher_id,omitempty"`
+	Project      string    `json:"project,omitempty"`
+	DocType      string    `json:"doc_type,omitempty"`
+	AgentSession string    `json:"agent_session,omitempty"`
+	Tags         string    `json:"tags,omitempty"`
+	Pinned       bool      `json:"pinned"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+type CreateParams struct {
+	Title        string
+	Format       string
+	Content      []byte
+	Visibility   string
+	PublisherID  string
+	Project      string
+	DocType      string
+	AgentSession string
+	Tags         string
 }
 
 type UpdateParams struct {
 	Title      *string
 	Visibility *string
+	Pinned     *bool
 }
 
 type Store struct {
@@ -82,6 +100,17 @@ func NewStore(dataDir string) (*Store, error) {
 		)
 	`); err != nil {
 		return nil, fmt.Errorf("create documents table: %w", err)
+	}
+
+	// Migrate: add metadata columns (idempotent — ALTER fails silently if column exists)
+	for _, col := range []struct{ name, def string }{
+		{"project", "TEXT NOT NULL DEFAULT ''"},
+		{"doc_type", "TEXT NOT NULL DEFAULT ''"},
+		{"agent_session", "TEXT NOT NULL DEFAULT ''"},
+		{"tags", "TEXT NOT NULL DEFAULT ''"},
+		{"pinned", "INTEGER NOT NULL DEFAULT 0"},
+	} {
+		db.Exec(fmt.Sprintf(`ALTER TABLE documents ADD COLUMN %s %s`, col.name, col.def))
 	}
 
 	return &Store{db: db, docsDir: docsDir}, nil
@@ -131,10 +160,10 @@ func (s *Store) GetPublisher(token string) (*Publisher, error) {
 }
 
 func (s *Store) Create(title, format string, content []byte, visibility string) (*Document, string, error) {
-	return s.CreateWithPublisher(title, format, content, visibility, "")
+	return s.CreateWithPublisher(CreateParams{Title: title, Format: format, Content: content, Visibility: visibility})
 }
 
-func (s *Store) CreateWithPublisher(title, format string, content []byte, visibility, publisherID string) (*Document, string, error) {
+func (s *Store) CreateWithPublisher(p CreateParams) (*Document, string, error) {
 	id, err := gonanoid.New(10)
 	if err != nil {
 		return nil, "", fmt.Errorf("generate id: %w", err)
@@ -145,38 +174,42 @@ func (s *Store) CreateWithPublisher(title, format string, content []byte, visibi
 	now := time.Now().UTC()
 
 	var pubID *string
-	if publisherID != "" {
-		pubID = &publisherID
+	if p.PublisherID != "" {
+		pubID = &p.PublisherID
 	}
 
 	if _, err := s.db.Exec(
-		`INSERT INTO documents (id, title, format, visibility, secret_hash, size_bytes, publisher_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, title, format, visibility, hash, len(content), pubID, now.Format(time.RFC3339Nano),
+		`INSERT INTO documents (id, title, format, visibility, secret_hash, size_bytes, publisher_id, project, doc_type, agent_session, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, p.Title, p.Format, p.Visibility, hash, len(p.Content), pubID, p.Project, p.DocType, p.AgentSession, p.Tags, now.Format(time.RFC3339Nano),
 	); err != nil {
 		return nil, "", fmt.Errorf("insert: %w", err)
 	}
 
-	path := filepath.Join(s.docsDir, id+"."+format)
-	if err := os.WriteFile(path, content, 0644); err != nil {
+	path := filepath.Join(s.docsDir, id+"."+p.Format)
+	if err := os.WriteFile(path, p.Content, 0644); err != nil {
 		s.db.Exec(`DELETE FROM documents WHERE id = ?`, id)
 		return nil, "", fmt.Errorf("write file: %w", err)
 	}
 
 	// Pre-render markdown to HTML for instant serving
-	if format == "md" {
-		if rendered, err := RenderMarkdown(content); err == nil {
+	if p.Format == "md" {
+		if rendered, err := RenderMarkdown(p.Content); err == nil {
 			os.WriteFile(filepath.Join(s.docsDir, id+".rendered.html"), rendered, 0644)
 		}
 	}
 
 	doc := &Document{
-		ID:          id,
-		Title:       title,
-		Format:      format,
-		Visibility:  visibility,
-		SizeBytes:   len(content),
-		PublisherID: publisherID,
-		CreatedAt:   now,
+		ID:           id,
+		Title:        p.Title,
+		Format:       p.Format,
+		Visibility:   p.Visibility,
+		SizeBytes:    len(p.Content),
+		PublisherID:  p.PublisherID,
+		Project:      p.Project,
+		DocType:      p.DocType,
+		AgentSession: p.AgentSession,
+		Tags:         p.Tags,
+		CreatedAt:    now,
 	}
 	return doc, secret, nil
 }
@@ -185,9 +218,10 @@ func (s *Store) Get(id string) (*Document, error) {
 	doc := &Document{}
 	var createdAt string
 	var pubID sql.NullString
+	var pinned int
 	err := s.db.QueryRow(
-		`SELECT id, title, format, visibility, size_bytes, publisher_id, created_at FROM documents WHERE id = ?`, id,
-	).Scan(&doc.ID, &doc.Title, &doc.Format, &doc.Visibility, &doc.SizeBytes, &pubID, &createdAt)
+		`SELECT id, title, format, visibility, size_bytes, publisher_id, project, doc_type, agent_session, tags, pinned, created_at FROM documents WHERE id = ?`, id,
+	).Scan(&doc.ID, &doc.Title, &doc.Format, &doc.Visibility, &doc.SizeBytes, &pubID, &doc.Project, &doc.DocType, &doc.AgentSession, &doc.Tags, &pinned, &createdAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -195,6 +229,7 @@ func (s *Store) Get(id string) (*Document, error) {
 		return nil, fmt.Errorf("query: %w", err)
 	}
 	doc.PublisherID = pubID.String
+	doc.Pinned = pinned != 0
 	doc.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
 	return doc, nil
 }
@@ -261,6 +296,15 @@ func (s *Store) Update(id, secret string, publisherID string, params *UpdatePara
 			return fmt.Errorf("update visibility: %w", err)
 		}
 	}
+	if params.Pinned != nil {
+		pinVal := 0
+		if *params.Pinned {
+			pinVal = 1
+		}
+		if _, err := s.db.Exec(`UPDATE documents SET pinned = ? WHERE id = ?`, pinVal, id); err != nil {
+			return fmt.Errorf("update pinned: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -273,11 +317,11 @@ func (s *Store) List(page, limit int, query string) ([]Document, int, error) {
 	if query != "" {
 		pattern := "%" + query + "%"
 		countQuery = `SELECT COUNT(*) FROM documents WHERE visibility = 'public' AND title LIKE ?`
-		listQuery = `SELECT id, title, format, visibility, size_bytes, created_at FROM documents WHERE visibility = 'public' AND title LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?`
+		listQuery = `SELECT id, title, format, visibility, size_bytes, project, doc_type, tags, pinned, created_at FROM documents WHERE visibility = 'public' AND title LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?`
 		args = []any{pattern}
 	} else {
 		countQuery = `SELECT COUNT(*) FROM documents WHERE visibility = 'public'`
-		listQuery = `SELECT id, title, format, visibility, size_bytes, created_at FROM documents WHERE visibility = 'public' ORDER BY created_at DESC LIMIT ? OFFSET ?`
+		listQuery = `SELECT id, title, format, visibility, size_bytes, project, doc_type, tags, pinned, created_at FROM documents WHERE visibility = 'public' ORDER BY created_at DESC LIMIT ? OFFSET ?`
 	}
 
 	var total int
@@ -296,9 +340,11 @@ func (s *Store) List(page, limit int, query string) ([]Document, int, error) {
 	for rows.Next() {
 		var d Document
 		var createdAt string
-		if err := rows.Scan(&d.ID, &d.Title, &d.Format, &d.Visibility, &d.SizeBytes, &createdAt); err != nil {
+		var pinned int
+		if err := rows.Scan(&d.ID, &d.Title, &d.Format, &d.Visibility, &d.SizeBytes, &d.Project, &d.DocType, &d.Tags, &pinned, &createdAt); err != nil {
 			return nil, 0, fmt.Errorf("scan: %w", err)
 		}
+		d.Pinned = pinned != 0
 		d.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
 		docs = append(docs, d)
 	}
@@ -316,7 +362,7 @@ func (s *Store) ListByPublisher(publisherID string, page, limit int) ([]Document
 	}
 
 	rows, err := s.db.Query(
-		`SELECT id, title, format, visibility, size_bytes, created_at FROM documents WHERE publisher_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		`SELECT id, title, format, visibility, size_bytes, project, doc_type, tags, pinned, created_at FROM documents WHERE publisher_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 		publisherID, limit, offset,
 	)
 	if err != nil {
@@ -328,10 +374,12 @@ func (s *Store) ListByPublisher(publisherID string, page, limit int) ([]Document
 	for rows.Next() {
 		var d Document
 		var createdAt string
-		if err := rows.Scan(&d.ID, &d.Title, &d.Format, &d.Visibility, &d.SizeBytes, &createdAt); err != nil {
+		var pinned int
+		if err := rows.Scan(&d.ID, &d.Title, &d.Format, &d.Visibility, &d.SizeBytes, &d.Project, &d.DocType, &d.Tags, &pinned, &createdAt); err != nil {
 			return nil, 0, fmt.Errorf("scan: %w", err)
 		}
 		d.PublisherID = publisherID
+		d.Pinned = pinned != 0
 		d.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
 		docs = append(docs, d)
 	}

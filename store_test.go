@@ -200,7 +200,7 @@ func TestCreateWithPublisher(t *testing.T) {
 	s := testStore(t)
 
 	pub, _, _ := s.Register("Pub Bot")
-	doc, _, err := s.CreateWithPublisher("Pub Doc", "html", []byte("<p>hi</p>"), "public", pub.ID)
+	doc, _, err := s.CreateWithPublisher(CreateParams{Title: "Pub Doc", Format: "html", Content: []byte("<p>hi</p>"), Visibility: "public", PublisherID: pub.ID})
 	if err != nil {
 		t.Fatalf("CreateWithPublisher: %v", err)
 	}
@@ -218,8 +218,8 @@ func TestListByPublisher(t *testing.T) {
 	s := testStore(t)
 
 	pub, _, _ := s.Register("List Bot")
-	s.CreateWithPublisher("My Doc A", "html", []byte("<p>a</p>"), "public", pub.ID)
-	s.CreateWithPublisher("My Doc B", "md", []byte("# b"), "private", pub.ID)
+	s.CreateWithPublisher(CreateParams{Title: "My Doc A", Format: "html", Content: []byte("<p>a</p>"), Visibility: "public", PublisherID: pub.ID})
+	s.CreateWithPublisher(CreateParams{Title: "My Doc B", Format: "md", Content: []byte("# b"), Visibility: "private", PublisherID: pub.ID})
 	s.Create("Other Doc", "html", []byte("<p>other</p>"), "public") // anonymous
 
 	docs, total, err := s.ListByPublisher(pub.ID, 1, 20)
@@ -242,7 +242,7 @@ func TestDeleteWithPublisherToken(t *testing.T) {
 	s := testStore(t)
 
 	pub, _, _ := s.Register("Del Bot")
-	doc, _, _ := s.CreateWithPublisher("To Delete", "html", []byte("<p>bye</p>"), "public", pub.ID)
+	doc, _, _ := s.CreateWithPublisher(CreateParams{Title: "To Delete", Format: "html", Content: []byte("<p>bye</p>"), Visibility: "public", PublisherID: pub.ID})
 
 	// Delete using publisher ID (not per-doc secret)
 	err := s.Delete(doc.ID, "", pub.ID)
@@ -261,7 +261,7 @@ func TestDeleteWrongPublisher(t *testing.T) {
 
 	pub1, _, _ := s.Register("Owner")
 	pub2, _, _ := s.Register("Other")
-	doc, _, _ := s.CreateWithPublisher("Protected", "html", []byte("<p>x</p>"), "public", pub1.ID)
+	doc, _, _ := s.CreateWithPublisher(CreateParams{Title: "Protected", Format: "html", Content: []byte("<p>x</p>"), Visibility: "public", PublisherID: pub1.ID})
 
 	err := s.Delete(doc.ID, "", pub2.ID)
 	if err != ErrForbidden {
@@ -273,7 +273,7 @@ func TestUpdateWithPublisherToken(t *testing.T) {
 	s := testStore(t)
 
 	pub, _, _ := s.Register("Update Bot")
-	doc, _, _ := s.CreateWithPublisher("Original", "html", []byte("<p>hi</p>"), "public", pub.ID)
+	doc, _, _ := s.CreateWithPublisher(CreateParams{Title: "Original", Format: "html", Content: []byte("<p>hi</p>"), Visibility: "public", PublisherID: pub.ID})
 
 	err := s.Update(doc.ID, "", pub.ID, &UpdateParams{Title: strPtr("Updated")})
 	if err != nil {
@@ -283,6 +283,143 @@ func TestUpdateWithPublisherToken(t *testing.T) {
 	got, _ := s.Get(doc.ID)
 	if got.Title != "Updated" {
 		t.Fatalf("expected 'Updated', got %q", got.Title)
+	}
+}
+
+func TestMetadataFieldsStoredAndRetrieved(t *testing.T) {
+	s := testStore(t)
+
+	pub, _, _ := s.Register("Meta Bot")
+	doc, _, err := s.CreateWithPublisher(CreateParams{
+		Title:        "Meta Doc",
+		Format:       "html",
+		Content:      []byte("<p>meta</p>"),
+		Visibility:   "public",
+		PublisherID:  pub.ID,
+		Project:      "rw",
+		DocType:      "report",
+		AgentSession: "sess_abc123",
+		Tags:         "migration,audit",
+	})
+	if err != nil {
+		t.Fatalf("CreateWithPublisher: %v", err)
+	}
+	if doc.Project != "rw" || doc.DocType != "report" || doc.AgentSession != "sess_abc123" || doc.Tags != "migration,audit" {
+		t.Fatalf("metadata not set on returned doc: %+v", doc)
+	}
+
+	got, err := s.Get(doc.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Project != "rw" {
+		t.Fatalf("expected project 'rw', got %q", got.Project)
+	}
+	if got.DocType != "report" {
+		t.Fatalf("expected doc_type 'report', got %q", got.DocType)
+	}
+	if got.AgentSession != "sess_abc123" {
+		t.Fatalf("expected agent_session 'sess_abc123', got %q", got.AgentSession)
+	}
+	if got.Tags != "migration,audit" {
+		t.Fatalf("expected tags 'migration,audit', got %q", got.Tags)
+	}
+	if got.Pinned != false {
+		t.Fatal("expected pinned false by default")
+	}
+}
+
+func TestCreateConvenienceMethodEmptyMetadata(t *testing.T) {
+	s := testStore(t)
+
+	doc, _, err := s.Create("Simple", "html", []byte("<p>simple</p>"), "public")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := s.Get(doc.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Project != "" || got.DocType != "" || got.AgentSession != "" || got.Tags != "" {
+		t.Fatalf("expected empty metadata, got project=%q doc_type=%q agent_session=%q tags=%q", got.Project, got.DocType, got.AgentSession, got.Tags)
+	}
+	if got.Pinned != false {
+		t.Fatal("expected pinned false")
+	}
+}
+
+func TestUpdatePinned(t *testing.T) {
+	s := testStore(t)
+	doc, secret, _ := s.Create("Pin Test", "html", []byte("<p>pin</p>"), "public")
+
+	pinTrue := true
+	err := s.Update(doc.ID, secret, "", &UpdateParams{Pinned: &pinTrue})
+	if err != nil {
+		t.Fatalf("Update pinned: %v", err)
+	}
+
+	got, _ := s.Get(doc.ID)
+	if !got.Pinned {
+		t.Fatal("expected pinned true after update")
+	}
+
+	pinFalse := false
+	err = s.Update(doc.ID, secret, "", &UpdateParams{Pinned: &pinFalse})
+	if err != nil {
+		t.Fatalf("Update pinned false: %v", err)
+	}
+
+	got, _ = s.Get(doc.ID)
+	if got.Pinned {
+		t.Fatal("expected pinned false after second update")
+	}
+}
+
+func TestMetadataInList(t *testing.T) {
+	s := testStore(t)
+
+	s.CreateWithPublisher(CreateParams{Title: "RW Report", Format: "html", Content: []byte("<p>rw</p>"), Visibility: "public", Project: "rw", DocType: "report", Tags: "migration"})
+	s.Create("Plain Doc", "html", []byte("<p>plain</p>"), "public")
+
+	docs, total, err := s.List(1, 20, "")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if total != 2 {
+		t.Fatalf("expected 2, got %d", total)
+	}
+
+	// Find the RW Report
+	var found bool
+	for _, d := range docs {
+		if d.Title == "RW Report" {
+			found = true
+			if d.Project != "rw" || d.DocType != "report" || d.Tags != "migration" {
+				t.Fatalf("metadata missing in list: %+v", d)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("RW Report not found in list")
+	}
+}
+
+func TestMetadataInListByPublisher(t *testing.T) {
+	s := testStore(t)
+
+	pub, _, _ := s.Register("List Meta Bot")
+	s.CreateWithPublisher(CreateParams{Title: "Pub Meta Doc", Format: "html", Content: []byte("<p>pm</p>"), Visibility: "public", PublisherID: pub.ID, Project: "tz", Tags: "audit"})
+
+	docs, total, err := s.ListByPublisher(pub.ID, 1, 20)
+	if err != nil {
+		t.Fatalf("ListByPublisher: %v", err)
+	}
+	if total != 1 {
+		t.Fatalf("expected 1, got %d", total)
+	}
+	if docs[0].Project != "tz" || docs[0].Tags != "audit" {
+		t.Fatalf("metadata missing in ListByPublisher: %+v", docs[0])
 	}
 }
 

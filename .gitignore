@@ -1,3 +1,4 @@
 data/
 *.db
 /share-service
+.share-token

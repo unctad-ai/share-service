@@ -126,10 +126,14 @@ func (h *Handlers) handlePublish(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxContentSize+4096) // content + JSON overhead
 
 	var req struct {
-		Title      string `json:"title"`
-		Format     string `json:"format"`
-		Content    string `json:"content"`
-		Visibility string `json:"visibility"`
+		Title        string `json:"title"`
+		Format       string `json:"format"`
+		Content      string `json:"content"`
+		Visibility   string `json:"visibility"`
+		Project      string `json:"project"`
+		DocType      string `json:"doc_type"`
+		AgentSession string `json:"agent_session"`
+		Tags         string `json:"tags"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		if err.Error() == "http: request body too large" {
@@ -189,7 +193,17 @@ func (h *Handlers) handlePublish(w http.ResponseWriter, r *http.Request) {
 		publisherID = pub.ID
 	}
 
-	doc, secret, err := h.store.CreateWithPublisher(req.Title, req.Format, []byte(req.Content), req.Visibility, publisherID)
+	doc, secret, err := h.store.CreateWithPublisher(CreateParams{
+		Title:        req.Title,
+		Format:       req.Format,
+		Content:      []byte(req.Content),
+		Visibility:   req.Visibility,
+		PublisherID:  publisherID,
+		Project:      req.Project,
+		DocType:      req.DocType,
+		AgentSession: req.AgentSession,
+		Tags:         req.Tags,
+	})
 	if err != nil {
 		jsonError(w, "internal error", 500)
 		return
@@ -260,6 +274,7 @@ func (h *Handlers) handlePatchDoc(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Title      *string `json:"title"`
 		Visibility *string `json:"visibility"`
+		Pinned     *bool   `json:"pinned"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, "invalid JSON", 400)
@@ -275,7 +290,7 @@ func (h *Handlers) handlePatchDoc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.store.Update(id, secret, publisherID, &UpdateParams{Title: req.Title, Visibility: req.Visibility})
+	err := h.store.Update(id, secret, publisherID, &UpdateParams{Title: req.Title, Visibility: req.Visibility, Pinned: req.Pinned})
 	if err == ErrNotFound {
 		jsonError(w, "not found", 404)
 		return

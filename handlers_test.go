@@ -408,8 +408,8 @@ func TestAPIMyDocs(t *testing.T) {
 	defer srv.Close()
 
 	pub, token, _ := store.Register("Docs Bot")
-	store.CreateWithPublisher("My Doc", "html", []byte("<p>mine</p>"), "public", pub.ID)
-	store.CreateWithPublisher("My Private", "md", []byte("# private"), "private", pub.ID)
+	store.CreateWithPublisher(CreateParams{Title: "My Doc", Format: "html", Content: []byte("<p>mine</p>"), Visibility: "public", PublisherID: pub.ID})
+	store.CreateWithPublisher(CreateParams{Title: "My Private", Format: "md", Content: []byte("# private"), Visibility: "private", PublisherID: pub.ID})
 	store.Create("Other Doc", "html", []byte("<p>other</p>"), "public")
 
 	req, _ := http.NewRequest("GET", srv.URL+"/api/me/documents", nil)
@@ -466,7 +466,7 @@ func TestAPIDeleteWithToken(t *testing.T) {
 	defer srv.Close()
 
 	pub, token, _ := store.Register("Del Bot")
-	doc, _, _ := store.CreateWithPublisher("To Delete", "html", []byte("<p>bye</p>"), "public", pub.ID)
+	doc, _, _ := store.CreateWithPublisher(CreateParams{Title: "To Delete", Format: "html", Content: []byte("<p>bye</p>"), Visibility: "public", PublisherID: pub.ID})
 
 	req, _ := http.NewRequest("DELETE", srv.URL+"/api/documents/"+doc.ID, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -483,7 +483,7 @@ func TestAPIPatchWithToken(t *testing.T) {
 	defer srv.Close()
 
 	pub, token, _ := store.Register("Patch Bot")
-	doc, _, _ := store.CreateWithPublisher("Original", "html", []byte("<p>hi</p>"), "public", pub.ID)
+	doc, _, _ := store.CreateWithPublisher(CreateParams{Title: "Original", Format: "html", Content: []byte("<p>hi</p>"), Visibility: "public", PublisherID: pub.ID})
 
 	body := `{"title":"Updated via Token"}`
 	req, _ := http.NewRequest("PATCH", srv.URL+"/api/documents/"+doc.ID, strings.NewReader(body))
