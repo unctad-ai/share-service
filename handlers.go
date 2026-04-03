@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"io/fs"
 	"math"
@@ -370,19 +371,39 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *Templates) {
 			return
 		}
 
-		content, err := h.store.ReadContent(doc.ID, doc.Format)
-		if err != nil {
-			http.Error(w, "internal error", 500)
+		// ETag from immutable document ID
+		etag := `"` + doc.ID + `"`
+		w.Header().Set("ETag", etag)
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		if r.Header.Get("If-None-Match") == etag {
+			w.WriteHeader(304)
 			return
 		}
 
 		rawURL := fmt.Sprintf("%s/d/%s/raw", h.baseURL, doc.ID)
+		data := map[string]any{
+			"Doc":    doc,
+			"RawURL": rawURL,
+		}
 
-		tmpl.Render(w, "view.html", map[string]any{
-			"Doc":     doc,
-			"Content": string(content),
-			"RawURL":  rawURL,
-		})
+		if doc.Format == "md" {
+			rendered, err := h.store.ReadRendered(doc.ID)
+			if err != nil {
+				http.Error(w, "internal error", 500)
+				return
+			}
+			data["RenderedHTML"] = template.HTML(rendered)
+			data["HighlightCSS"] = template.CSS(highlightCSS)
+		} else {
+			content, err := h.store.ReadContent(doc.ID, doc.Format)
+			if err != nil {
+				http.Error(w, "internal error", 500)
+				return
+			}
+			data["Content"] = string(content)
+		}
+
+		tmpl.Render(w, "view.html", data)
 	})
 
 	mux.HandleFunc("GET /d/{id}/raw", func(w http.ResponseWriter, r *http.Request) {
