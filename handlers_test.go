@@ -585,3 +585,28 @@ func TestPublishWithMetadata(t *testing.T) {
 		t.Errorf("expected tags 'migration,tanzania', got %v", doc["tags"])
 	}
 }
+
+func TestAPIListFilterProject(t *testing.T) {
+	srv, store := testServer(t)
+	defer srv.Close()
+
+	store.Create("Global Doc", "html", []byte("<p>g</p>"), "public")
+	store.CreateWithPublisher(CreateParams{Title: "TZ Report", Format: "html", Content: []byte("<p>tz</p>"), Visibility: "public", Project: "tz"})
+	store.CreateWithPublisher(CreateParams{Title: "RW Analysis", Format: "md", Content: []byte("# rw"), Visibility: "public", Project: "rw"})
+
+	resp, _ := http.Get(srv.URL + "/api/documents?project=tz")
+	defer resp.Body.Close()
+
+	var result struct {
+		Documents []Document `json:"documents"`
+		Total     int        `json:"total"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if result.Total != 1 {
+		t.Fatalf("expected 1 doc for project=tz, got %d", result.Total)
+	}
+	if result.Documents[0].Title != "TZ Report" {
+		t.Errorf("expected 'TZ Report', got %q", result.Documents[0].Title)
+	}
+}

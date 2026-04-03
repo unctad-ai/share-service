@@ -319,8 +319,10 @@ func (h *Handlers) handleListDocs(w http.ResponseWriter, r *http.Request) {
 		limit = 20
 	}
 	query := r.URL.Query().Get("q")
+	project := r.URL.Query().Get("project")
+	docType := r.URL.Query().Get("type")
 
-	docs, total, err := h.store.List(page, limit, query)
+	docs, total, err := h.store.List(page, limit, ListFilter{Query: query, Project: project, DocType: docType})
 	if err != nil {
 		jsonError(w, "internal error", 500)
 		return
@@ -354,9 +356,10 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *Templates) {
 			page = 1
 		}
 		query := r.URL.Query().Get("q")
+		project := r.URL.Query().Get("project")
 		limit := 20
 
-		docs, total, err := h.store.List(page, limit, query)
+		docs, total, err := h.store.List(page, limit, ListFilter{Query: query, Project: project})
 		if err != nil {
 			http.Error(w, "internal error", 500)
 			return

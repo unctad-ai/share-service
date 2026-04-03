@@ -123,7 +123,7 @@ func TestList(t *testing.T) {
 	s.Create("Doc B", "md", []byte("# b"), "public")
 	s.Create("Doc C", "html", []byte("<p>c</p>"), "private")
 
-	docs, total, err := s.List(1, 20, "")
+	docs, total, err := s.List(1, 20, ListFilter{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestListSearch(t *testing.T) {
 	s.Create("Kenya Report", "html", []byte("<p>kenya</p>"), "public")
 	s.Create("Bhutan Analysis", "md", []byte("# bhutan"), "public")
 
-	docs, total, err := s.List(1, 20, "kenya")
+	docs, total, err := s.List(1, 20, ListFilter{Query: "kenya"})
 	if err != nil {
 		t.Fatalf("List search: %v", err)
 	}
@@ -382,7 +382,7 @@ func TestMetadataInList(t *testing.T) {
 	s.CreateWithPublisher(CreateParams{Title: "RW Report", Format: "html", Content: []byte("<p>rw</p>"), Visibility: "public", Project: "rw", DocType: "report", Tags: "migration"})
 	s.Create("Plain Doc", "html", []byte("<p>plain</p>"), "public")
 
-	docs, total, err := s.List(1, 20, "")
+	docs, total, err := s.List(1, 20, ListFilter{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	gonanoid "github.com/matoous/go-nanoid/v2"
@@ -57,6 +58,12 @@ type UpdateParams struct {
 	Title      *string
 	Visibility *string
 	Pinned     *bool
+}
+
+type ListFilter struct {
+	Query   string
+	Project string
+	DocType string
 }
 
 type Store struct {
@@ -308,29 +315,35 @@ func (s *Store) Update(id, secret string, publisherID string, params *UpdatePara
 	return nil
 }
 
-func (s *Store) List(page, limit int, query string) ([]Document, int, error) {
+func (s *Store) List(page, limit int, filter ListFilter) ([]Document, int, error) {
 	offset := (page - 1) * limit
 
-	var countQuery, listQuery string
+	var where []string
 	var args []any
+	where = append(where, "visibility = 'public'")
 
-	if query != "" {
-		pattern := "%" + query + "%"
-		countQuery = `SELECT COUNT(*) FROM documents WHERE visibility = 'public' AND title LIKE ?`
-		listQuery = `SELECT id, title, format, visibility, size_bytes, project, doc_type, tags, pinned, created_at FROM documents WHERE visibility = 'public' AND title LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?`
-		args = []any{pattern}
-	} else {
-		countQuery = `SELECT COUNT(*) FROM documents WHERE visibility = 'public'`
-		listQuery = `SELECT id, title, format, visibility, size_bytes, project, doc_type, tags, pinned, created_at FROM documents WHERE visibility = 'public' ORDER BY created_at DESC LIMIT ? OFFSET ?`
+	if filter.Query != "" {
+		where = append(where, "title LIKE ?")
+		args = append(args, "%"+filter.Query+"%")
+	}
+	if filter.Project != "" {
+		where = append(where, "project = ?")
+		args = append(args, filter.Project)
+	}
+	if filter.DocType != "" {
+		where = append(where, "doc_type = ?")
+		args = append(args, filter.DocType)
 	}
 
+	whereClause := strings.Join(where, " AND ")
+
 	var total int
-	if err := s.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM documents WHERE `+whereClause, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count: %w", err)
 	}
 
 	args = append(args, limit, offset)
-	rows, err := s.db.Query(listQuery, args...)
+	rows, err := s.db.Query(`SELECT id, title, format, visibility, size_bytes, project, doc_type, tags, pinned, created_at FROM documents WHERE `+whereClause+` ORDER BY created_at DESC LIMIT ? OFFSET ?`, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list: %w", err)
 	}
