@@ -1,18 +1,29 @@
 {{template "base.html" .}}
 
-{{define "title"}}share. — recent documents{{end}}
+{{define "title"}}share. — team activity{{end}}
 
 {{define "body"}}
 <nav class="nav">
   <div class="nav-left">
     <a href="/" class="logo"><span class="logo-text">share<span class="logo-dot">.</span></span></a>
+    <span class="nav-subtitle">team activity</span>
   </div>
-  <a href="/upload" class="btn">Upload</a>
+  <div class="nav-right">
+    <a href="/upload" class="btn">Upload</a>
+  </div>
 </nav>
 <div class="container">
   <form method="get" action="/">
-    <input type="text" name="q" class="search-box" placeholder="Search by title..." value="{{.Query}}">
+    <input type="text" name="q" class="search-box" placeholder="Search documents..." value="{{.Query}}">
   </form>
+  {{if .Projects}}
+  <div class="filter-chips">
+    <a href="/" class="chip{{if not .Project}} chip-active{{end}}">All</a>
+    {{range .Projects}}
+    <a href="/?project={{.}}" class="chip{{if eq . $.Project}} chip-active{{end}}">{{.}}</a>
+    {{end}}
+  </div>
+  {{end}}
   {{if .Documents}}
   <div class="doc-list">
     {{range .Documents}}
@@ -20,22 +31,23 @@
       <span class="doc-format {{.Format}}">{{.Format | upper}}</span>
       <div class="doc-info">
         <div class="doc-title">{{.Title}}</div>
-        <div class="doc-meta">{{.SizeBytes | filesize}} · {{.CreatedAt | timeago}}</div>
+        <div class="doc-meta">
+          {{.SizeBytes | filesize}} · {{.CreatedAt | timeago}}{{if .Project}} · <span class="doc-project">{{.Project}}</span>{{end}}{{if .DocType}} · <span class="doc-type">{{.DocType}}</span>{{end}}
+        </div>
       </div>
     </a>
     {{end}}
   </div>
   {{if or .HasPrev .HasNext}}
   <div class="pagination">
-    {{if .HasPrev}}<a href="/?page={{.PrevPage}}{{if .Query}}&q={{.Query}}{{end}}">← Newer</a>{{end}}
-    {{if .HasNext}}<a href="/?page={{.NextPage}}{{if .Query}}&q={{.Query}}{{end}}">Older →</a>{{end}}
+    {{if .HasPrev}}<a href="/?page={{.PrevPage}}{{if .Query}}&q={{.Query}}{{end}}{{if .Project}}&project={{.Project}}{{end}}">← Newer</a>{{end}}
+    {{if .HasNext}}<a href="/?page={{.NextPage}}{{if .Query}}&q={{.Query}}{{end}}{{if .Project}}&project={{.Project}}{{end}}">Older →</a>{{end}}
   </div>
   {{end}}
   {{else}}
   <div class="empty">
-    <div class="empty-heading">Nothing published yet</div>
-    <div class="empty-text">Documents shared via the API or uploaded here will appear in this feed.</div>
-    <a href="/upload" class="btn-ghost btn">Upload a document</a>
+    <div class="empty-heading">No documents yet</div>
+    <div class="empty-text">AI agent outputs, reports, and analyses will appear here as they're published.</div>
   </div>
   {{end}}
 </div>

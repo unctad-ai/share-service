@@ -364,6 +364,21 @@ func (s *Store) List(page, limit int, filter ListFilter) ([]Document, int, error
 	return docs, total, nil
 }
 
+func (s *Store) DistinctProjects() ([]string, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT project FROM documents WHERE visibility = 'public' AND project != '' ORDER BY project`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var projects []string
+	for rows.Next() {
+		var p string
+		rows.Scan(&p)
+		projects = append(projects, p)
+	}
+	return projects, nil
+}
+
 func (s *Store) ListByPublisher(publisherID string, page, limit int) ([]Document, int, error) {
 	offset := (page - 1) * limit
 

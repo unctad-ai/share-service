@@ -703,3 +703,28 @@ body {
 .md-body input[type="checkbox"] { margin-right: 0.5em; transform: scale(1.2); position: relative; top: 2px; }
 .md-body del { color: var(--stone-600); }
 .md-body strong { font-weight: 600; }
+
+/* ---- Filter chips ---- */
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.chip {
+  padding: 4px 12px;
+  border: 1px solid var(--stone-200);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--stone-600);
+  text-decoration: none;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.chip:hover { background: var(--stone-50); border-color: var(--stone-400); }
+.chip-active { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent); }
+
+/* ---- Activity feed meta ---- */
+.doc-project { font-weight: 600; color: var(--accent); }
+.doc-type { color: var(--stone-600); font-style: italic; }
+.nav-subtitle { font-size: 13px; color: var(--stone-600); font-weight: 400; }

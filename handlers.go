@@ -368,10 +368,14 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *Templates) {
 			docs = []Document{}
 		}
 
+		projects, _ := h.store.DistinctProjects()
+
 		totalPages := int(math.Ceil(float64(total) / float64(limit)))
 
 		tmpl.Render(w, "home.html", map[string]any{
 			"Documents": docs,
+			"Projects":  projects,
+			"Project":   project,
 			"Query":     query,
 			"Page":      page,
 			"HasPrev":   page > 1,
