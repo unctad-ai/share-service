@@ -43,6 +43,12 @@
   if (isMd) {
     var rendered = document.getElementById('rendered');
 
+    // Open all content links in new tab
+    rendered.querySelectorAll('a:not(.heading-anchor)').forEach(function(a) {
+      a.target = '_blank';
+      a.rel = 'noopener';
+    });
+
     // Heading anchors
     var headings = rendered.querySelectorAll('h1, h2, h3');
     var headingData = [];
