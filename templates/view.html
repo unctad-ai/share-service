@@ -3,7 +3,8 @@
 {{define "title"}}{{.Doc.Title}} — share.{{end}}
 
 {{define "body"}}
-<nav class="nav">
+{{if eq .Doc.Format "md"}}<div class="progress-bar" id="progressBar"></div>{{end}}
+<nav class="nav nav-sticky">
   <div class="nav-left">
     <a href="/" class="logo"><span class="logo-text">share<span class="logo-dot">.</span></span></a>
     <span class="nav-title">{{.Doc.Title}}</span>
@@ -18,11 +19,17 @@
   </div>
 </nav>
 {{if eq .Doc.Format "md"}}
-<article class="md-body" id="rendered"></article>
-<div class="source-view" id="source"><div class="source-gutter" id="gutter"></div><div class="source-code" id="sourceCode">{{.Content}}</div></div>
+<div class="doc-layout" id="docLayout">
+  <article class="md-body" id="rendered"></article>
+  <aside class="toc-sidebar" id="tocSidebar" style="display:none">
+    <div class="toc-header">On this page</div>
+    <nav class="toc-nav" id="tocNav"></nav>
+  </aside>
+</div>
+<div class="source-view" id="source"><div class="source-gutter" id="gutter"></div><pre class="source-code" id="sourceCode">{{.Content}}</pre></div>
 {{else}}
 <iframe class="viewer-frame" id="rendered" sandbox="allow-scripts" srcdoc="{{.Content}}"></iframe>
-<div class="source-view" id="source"><div class="source-gutter" id="gutter"></div><div class="source-code" id="sourceCode">{{.Content}}</div></div>
+<div class="source-view" id="source"><div class="source-gutter" id="gutter"></div><pre class="source-code" id="sourceCode">{{.Content}}</pre></div>
 {{end}}
 {{end}}
 
@@ -33,24 +40,100 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
 <script>
 (function() {
-  marked.setOptions({
-    gfm: true,
-    breaks: false,
-    highlight: function(code, lang) {
-      if (lang && hljs.getLanguage(lang)) {
-        return hljs.highlight(code, {language: lang}).value;
-      }
-      return hljs.highlightAuto(code).value;
-    }
-  });
+  // Render markdown
   var src = document.getElementById('sourceCode').textContent;
   document.getElementById('rendered').innerHTML = marked.parse(src);
+
+  // Post-process headings: collect data, add IDs and anchor links
+  var headings = document.querySelectorAll('#rendered h1, #rendered h2, #rendered h3');
+  var headingData = [];
+  var usedIds = {};
+  headings.forEach(function(h) {
+    var text = h.textContent.trim();
+    var base = text.toLowerCase().replace(/[^\w]+/g, '-').replace(/^-|-$/g, '');
+    var id = base;
+    if (usedIds[id]) { usedIds[id]++; id = base + '-' + usedIds[id]; } else { usedIds[id] = 1; }
+    h.id = id;
+    headingData.push({ el: h, text: text, id: id, tag: h.tagName.toLowerCase() });
+    var a = document.createElement('a');
+    a.className = 'heading-anchor';
+    a.href = '#' + id;
+    a.textContent = '#';
+    h.appendChild(a);
+  });
+
+  // Post-process code blocks: syntax highlight + language label + copy button
+  document.querySelectorAll('#rendered pre code').forEach(function(code) {
+    var lang = '';
+    (code.className || '').split(' ').forEach(function(c) {
+      if (c.indexOf('language-') === 0) lang = c.slice(9);
+    });
+    if (lang && hljs.getLanguage(lang)) {
+      code.innerHTML = hljs.highlight(code.textContent, {language: lang}).value;
+    }
+    var pre = code.parentElement;
+    var wrapper = document.createElement('div');
+    wrapper.className = 'code-block';
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    if (lang) {
+      var label = document.createElement('span');
+      label.className = 'code-lang';
+      label.textContent = lang;
+      wrapper.appendChild(label);
+    }
+    var btn = document.createElement('button');
+    btn.className = 'code-copy';
+    btn.textContent = 'Copy';
+    btn.onclick = function() {
+      navigator.clipboard.writeText(code.textContent).then(function() {
+        btn.textContent = 'Copied!';
+        setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
+      });
+    };
+    wrapper.appendChild(btn);
+  });
+
+  // Build TOC if enough headings
+  if (headingData.length >= 3) {
+    var tocNav = document.getElementById('tocNav');
+    headingData.forEach(function(d) {
+      var link = document.createElement('a');
+      link.href = '#' + d.id;
+      link.textContent = d.text;
+      link.className = 'toc-link toc-' + d.tag;
+      link.onclick = function(e) {
+        e.preventDefault();
+        document.getElementById(d.id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
+      tocNav.appendChild(link);
+    });
+    document.getElementById('tocSidebar').style.display = '';
+
+    // Scroll spy
+    var observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          document.querySelectorAll('.toc-link.active').forEach(function(l) { l.classList.remove('active'); });
+          var active = tocNav.querySelector('a[href="#' + entry.target.id + '"]');
+          if (active) active.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-60px 0px -80% 0px' });
+    headingData.forEach(function(d) { observer.observe(d.el); });
+  }
+
+  // Progress bar
+  window.addEventListener('scroll', function() {
+    var el = document.documentElement;
+    var pct = el.scrollTop / (el.scrollHeight - el.clientHeight) * 100;
+    document.getElementById('progressBar').style.width = Math.min(pct, 100) + '%';
+  });
 })();
 </script>
 {{end}}
 <script>
 (function() {
-  // Generate line numbers
   var code = document.getElementById('sourceCode').textContent;
   var lines = code.split('\n');
   var gutter = document.getElementById('gutter');
@@ -60,16 +143,24 @@
 })();
 
 function showSource() {
-  document.getElementById('rendered').style.display = 'none';
+  var layout = document.getElementById('docLayout');
+  var rendered = document.getElementById('rendered');
+  (layout || rendered).style.display = 'none';
   document.getElementById('source').style.display = 'flex';
   document.getElementById('btnSource').classList.add('active');
   document.getElementById('btnRendered').classList.remove('active');
+  var pb = document.getElementById('progressBar');
+  if (pb) pb.style.display = 'none';
 }
 function showRendered() {
-  document.getElementById('rendered').style.display = '';
+  var layout = document.getElementById('docLayout');
+  var rendered = document.getElementById('rendered');
+  (layout || rendered).style.display = layout ? 'flex' : '';
   document.getElementById('source').style.display = 'none';
   document.getElementById('btnRendered').classList.add('active');
   document.getElementById('btnSource').classList.remove('active');
+  var pb = document.getElementById('progressBar');
+  if (pb) pb.style.display = '';
 }
 document.getElementById('claudeLink').href = 'claude-cli://open?q=' + encodeURIComponent('{{.RawURL}}');
 </script>
