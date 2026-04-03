@@ -10,16 +10,19 @@
   </div>
   <div class="nav-right">
     <span>{{.Doc.CreatedAt | formatdate}}</span>
-    <button class="nav-toggle" onclick="toggleSource()" id="sourceToggle">Source</button>
+    <div class="view-toggle">
+      <button class="view-toggle-btn active" id="btnRendered" onclick="showRendered()">Rendered</button>
+      <button class="view-toggle-btn" id="btnSource" onclick="showSource()">Source</button>
+    </div>
     <a class="nav-toggle" id="claudeLink" href="claude-cli://open?q=" title="Open in Claude Code">Claude ↗</a>
   </div>
 </nav>
 {{if eq .Doc.Format "md"}}
 <article class="md-body" id="rendered"></article>
-<pre class="viewer-source" id="source">{{.Content}}</pre>
+<div class="source-view" id="source"><div class="source-gutter" id="gutter"></div><div class="source-code" id="sourceCode">{{.Content}}</div></div>
 {{else}}
 <iframe class="viewer-frame" id="rendered" sandbox="allow-scripts" srcdoc="{{.Content}}"></iframe>
-<pre class="viewer-source" id="source">{{.Content}}</pre>
+<div class="source-view" id="source"><div class="source-gutter" id="gutter"></div><div class="source-code" id="sourceCode">{{.Content}}</div></div>
 {{end}}
 {{end}}
 
@@ -40,20 +43,33 @@
       return hljs.highlightAuto(code).value;
     }
   });
-  var src = document.getElementById('source').textContent;
+  var src = document.getElementById('sourceCode').textContent;
   document.getElementById('rendered').innerHTML = marked.parse(src);
 })();
 </script>
 {{end}}
 <script>
-function toggleSource() {
-  var rendered = document.getElementById('rendered');
-  var source = document.getElementById('source');
-  var btn = document.getElementById('sourceToggle');
-  var showing = source.style.display === 'block';
-  rendered.style.display = showing ? '' : 'none';
-  source.style.display = showing ? 'none' : 'block';
-  btn.textContent = showing ? 'Source' : 'Rendered';
+(function() {
+  // Generate line numbers
+  var code = document.getElementById('sourceCode').textContent;
+  var lines = code.split('\n');
+  var gutter = document.getElementById('gutter');
+  var nums = [];
+  for (var i = 1; i <= lines.length; i++) nums.push(i);
+  gutter.textContent = nums.join('\n');
+})();
+
+function showSource() {
+  document.getElementById('rendered').style.display = 'none';
+  document.getElementById('source').style.display = 'flex';
+  document.getElementById('btnSource').classList.add('active');
+  document.getElementById('btnRendered').classList.remove('active');
+}
+function showRendered() {
+  document.getElementById('rendered').style.display = '';
+  document.getElementById('source').style.display = 'none';
+  document.getElementById('btnRendered').classList.add('active');
+  document.getElementById('btnSource').classList.remove('active');
 }
 document.getElementById('claudeLink').href = 'claude-cli://open?q=' + encodeURIComponent('{{.RawURL}}');
 </script>
