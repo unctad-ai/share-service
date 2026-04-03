@@ -6,7 +6,6 @@ import (
 
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/alecthomas/chroma/v2/styles"
-	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
@@ -55,23 +54,3 @@ func RenderMarkdown(source []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// htmlSanitizer strips scripts, event handlers, and other dangerous elements
-// while preserving safe content, styles, and structure.
-var htmlSanitizer *bluemonday.Policy
-
-func init() {
-	htmlSanitizer = bluemonday.UGCPolicy()
-	// Allow style attributes and blocks for generated reports
-	htmlSanitizer.AllowStyling()
-	// Allow id attributes for heading anchors/TOC
-	htmlSanitizer.AllowAttrs("id").Globally()
-	// Allow class attributes for styled content
-	htmlSanitizer.AllowAttrs("class").Globally()
-	// Allow data attributes used by some report generators
-	htmlSanitizer.AllowDataAttributes()
-}
-
-// SanitizeHTML strips dangerous elements while preserving safe content.
-func SanitizeHTML(source []byte) []byte {
-	return htmlSanitizer.SanitizeBytes(source)
-}

@@ -351,6 +351,11 @@ body {
 }
 
 /* ---- Viewer ---- */
+.viewer-frame {
+  width: 100%;
+  height: calc(100vh - 48px);
+  border: none;
+}
 .nav-sticky {
   position: sticky;
   top: 0;

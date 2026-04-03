@@ -162,14 +162,11 @@ func (s *Store) CreateWithPublisher(title, format string, content []byte, visibi
 		return nil, "", fmt.Errorf("write file: %w", err)
 	}
 
-	// Pre-render for instant serving
+	// Pre-render markdown to HTML for instant serving
 	if format == "md" {
 		if rendered, err := RenderMarkdown(content); err == nil {
 			os.WriteFile(filepath.Join(s.docsDir, id+".rendered.html"), rendered, 0644)
 		}
-	} else if format == "html" {
-		sanitized := SanitizeHTML(content)
-		os.WriteFile(filepath.Join(s.docsDir, id+".rendered.html"), sanitized, 0644)
 	}
 
 	doc := &Document{
@@ -211,26 +208,20 @@ func (s *Store) ReadContent(id, format string) ([]byte, error) {
 	return data, err
 }
 
-// ReadRendered returns pre-rendered HTML for a document.
+// ReadRendered returns pre-rendered HTML for a markdown document.
 // Falls back to on-the-fly rendering (and caches the result) for old docs.
-func (s *Store) ReadRendered(id, format string) ([]byte, error) {
+func (s *Store) ReadRendered(id string) ([]byte, error) {
 	path := filepath.Join(s.docsDir, id+".rendered.html")
 	if data, err := os.ReadFile(path); err == nil {
 		return data, nil
 	}
-	raw, err := s.ReadContent(id, format)
+	raw, err := s.ReadContent(id, "md")
 	if err != nil {
 		return nil, err
 	}
-	var rendered []byte
-	if format == "md" {
-		var renderErr error
-		rendered, renderErr = RenderMarkdown(raw)
-		if renderErr != nil {
-			return nil, renderErr
-		}
-	} else {
-		rendered = SanitizeHTML(raw)
+	rendered, err := RenderMarkdown(raw)
+	if err != nil {
+		return nil, err
 	}
 	os.WriteFile(path, rendered, 0644) // cache for next time
 	return rendered, nil

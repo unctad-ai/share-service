@@ -3,7 +3,7 @@
 {{define "title"}}{{.Doc.Title}} — share.{{end}}
 
 {{define "body"}}
-<div class="progress-bar" id="progressBar"></div>
+{{if eq .Doc.Format "md"}}<div class="progress-bar" id="progressBar"></div>{{end}}
 <nav class="nav nav-sticky">
   <div class="nav-left">
     <a href="/" class="logo"><span class="logo-text">share<span class="logo-dot">.</span></span></a>
@@ -18,7 +18,8 @@
     <a class="nav-toggle" id="claudeLink" href="claude-cli://open?q=" title="Open in Claude Code">Claude ↗</a>
   </div>
 </nav>
-{{if .HighlightCSS}}<style>{{.HighlightCSS}}</style>{{end}}
+{{if eq .Doc.Format "md"}}
+<style>{{.HighlightCSS}}</style>
 <div class="doc-layout" id="docLayout">
   <article class="md-body" id="rendered">{{.RenderedHTML}}</article>
   <aside class="toc-sidebar" id="tocSidebar" style="display:none">
@@ -27,87 +28,103 @@
   </aside>
 </div>
 <div class="source-view" id="source"><div class="source-gutter" id="gutter"></div><pre class="source-code" id="sourceCode"></pre></div>
+{{else}}
+<iframe class="viewer-frame" id="rendered" sandbox="allow-scripts" srcdoc="{{.Content}}"></iframe>
+<div class="source-view" id="source"><div class="source-gutter" id="gutter"></div><pre class="source-code" id="sourceCode">{{.Content}}</pre></div>
+{{end}}
 {{end}}
 
 {{define "scripts"}}
 <script>
 (function() {
   var rawURL = '{{.RawURL}}';
-  var rendered = document.getElementById('rendered');
+  var isMd = {{if eq .Doc.Format "md"}}true{{else}}false{{end}};
 
-  // --- Heading anchors ---
-  var headings = rendered.querySelectorAll('h1, h2, h3');
-  var headingData = [];
-  headings.forEach(function(h) {
-    // Generate ID if missing
-    if (!h.id) {
-      h.id = h.textContent.trim().toLowerCase().replace(/[^\w]+/g, '-').replace(/^-|-$/g, '');
-    }
-    headingData.push({ el: h, text: h.textContent.trim(), id: h.id, tag: h.tagName.toLowerCase() });
-    var a = document.createElement('a');
-    a.className = 'heading-anchor';
-    a.href = '#' + h.id;
-    a.textContent = '#';
-    h.appendChild(a);
-  });
+  if (isMd) {
+    var rendered = document.getElementById('rendered');
 
-  // --- Code block copy buttons ---
-  rendered.querySelectorAll('pre').forEach(function(pre) {
-    var code = pre.querySelector('code');
-    if (!code) return;
-    var wrapper = document.createElement('div');
-    wrapper.className = 'code-block';
-    pre.parentNode.insertBefore(wrapper, pre);
-    wrapper.appendChild(pre);
-    var btn = document.createElement('button');
-    btn.className = 'code-copy';
-    btn.textContent = 'Copy';
-    btn.onclick = function() {
-      navigator.clipboard.writeText(code.textContent).then(function() {
-        btn.textContent = 'Copied!';
-        setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
-      });
-    };
-    wrapper.appendChild(btn);
-  });
-
-  // --- TOC (if enough headings) ---
-  if (headingData.length >= 3) {
-    var tocNav = document.getElementById('tocNav');
-    headingData.forEach(function(d) {
-      var link = document.createElement('a');
-      link.href = '#' + d.id;
-      link.textContent = d.text;
-      link.className = 'toc-link toc-' + d.tag;
-      link.onclick = function(e) {
-        e.preventDefault();
-        document.getElementById(d.id).scrollIntoView({ behavior: 'smooth', block: 'start' });
-      };
-      tocNav.appendChild(link);
+    // Heading anchors
+    var headings = rendered.querySelectorAll('h1, h2, h3');
+    var headingData = [];
+    headings.forEach(function(h) {
+      if (!h.id) {
+        h.id = h.textContent.trim().toLowerCase().replace(/[^\w]+/g, '-').replace(/^-|-$/g, '');
+      }
+      headingData.push({ el: h, text: h.textContent.trim(), id: h.id, tag: h.tagName.toLowerCase() });
+      var a = document.createElement('a');
+      a.className = 'heading-anchor';
+      a.href = '#' + h.id;
+      a.textContent = '#';
+      h.appendChild(a);
     });
-    document.getElementById('tocSidebar').style.display = '';
 
-    var observer = new IntersectionObserver(function(entries) {
-      entries.forEach(function(entry) {
-        if (entry.isIntersecting) {
-          document.querySelectorAll('.toc-link.active').forEach(function(l) { l.classList.remove('active'); });
-          var active = tocNav.querySelector('a[href="#' + entry.target.id + '"]');
-          if (active) active.classList.add('active');
-        }
+    // Code block copy buttons
+    rendered.querySelectorAll('pre').forEach(function(pre) {
+      var code = pre.querySelector('code');
+      if (!code) return;
+      var wrapper = document.createElement('div');
+      wrapper.className = 'code-block';
+      pre.parentNode.insertBefore(wrapper, pre);
+      wrapper.appendChild(pre);
+      var btn = document.createElement('button');
+      btn.className = 'code-copy';
+      btn.textContent = 'Copy';
+      btn.onclick = function() {
+        navigator.clipboard.writeText(code.textContent).then(function() {
+          btn.textContent = 'Copied!';
+          setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
+        });
+      };
+      wrapper.appendChild(btn);
+    });
+
+    // TOC
+    if (headingData.length >= 3) {
+      var tocNav = document.getElementById('tocNav');
+      headingData.forEach(function(d) {
+        var link = document.createElement('a');
+        link.href = '#' + d.id;
+        link.textContent = d.text;
+        link.className = 'toc-link toc-' + d.tag;
+        link.onclick = function(e) {
+          e.preventDefault();
+          document.getElementById(d.id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+        tocNav.appendChild(link);
       });
-    }, { rootMargin: '-60px 0px -80% 0px' });
-    headingData.forEach(function(d) { observer.observe(d.el); });
+      document.getElementById('tocSidebar').style.display = '';
+
+      var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            document.querySelectorAll('.toc-link.active').forEach(function(l) { l.classList.remove('active'); });
+            var active = tocNav.querySelector('a[href="#' + entry.target.id + '"]');
+            if (active) active.classList.add('active');
+          }
+        });
+      }, { rootMargin: '-60px 0px -80% 0px' });
+      headingData.forEach(function(d) { observer.observe(d.el); });
+    }
+
+    // Progress bar
+    window.addEventListener('scroll', function() {
+      var el = document.documentElement;
+      var pct = el.scrollTop / (el.scrollHeight - el.clientHeight) * 100;
+      document.getElementById('progressBar').style.width = Math.min(pct, 100) + '%';
+    });
   }
 
-  // --- Progress bar ---
-  window.addEventListener('scroll', function() {
-    var el = document.documentElement;
-    var pct = el.scrollTop / (el.scrollHeight - el.clientHeight) * 100;
-    document.getElementById('progressBar').style.width = Math.min(pct, 100) + '%';
-  });
+  // Line numbers for HTML source (already in page)
+  if (!isMd) {
+    var text = document.getElementById('sourceCode').textContent;
+    var lines = text.split('\n');
+    var nums = [];
+    for (var i = 1; i <= lines.length; i++) nums.push(i);
+    document.getElementById('gutter').textContent = nums.join('\n');
+  }
 
-  // --- View toggle (lazy source fetch) ---
-  var sourceLoaded = false;
+  // View toggle
+  var sourceLoaded = !isMd; // HTML source already in page, MD needs fetch
 
   window.showSource = function() {
     if (!sourceLoaded) {
@@ -123,19 +140,25 @@
           sourceLoaded = true;
         });
     }
-    document.getElementById('docLayout').style.display = 'none';
+    var layout = document.getElementById('docLayout');
+    var rendered = document.getElementById('rendered');
+    (layout || rendered).style.display = 'none';
     document.getElementById('source').style.display = 'flex';
     document.getElementById('btnSource').classList.add('active');
     document.getElementById('btnRendered').classList.remove('active');
-    document.getElementById('progressBar').style.display = 'none';
+    var pb = document.getElementById('progressBar');
+    if (pb) pb.style.display = 'none';
   };
 
   window.showRendered = function() {
-    document.getElementById('docLayout').style.display = 'flex';
+    var layout = document.getElementById('docLayout');
+    var rendered = document.getElementById('rendered');
+    (layout || rendered).style.display = layout ? 'flex' : '';
     document.getElementById('source').style.display = 'none';
     document.getElementById('btnRendered').classList.add('active');
     document.getElementById('btnSource').classList.remove('active');
-    document.getElementById('progressBar').style.display = '';
+    var pb = document.getElementById('progressBar');
+    if (pb) pb.style.display = '';
   };
 
   document.getElementById('claudeLink').href = 'claude-cli://open?q=' + encodeURIComponent(rawURL);
