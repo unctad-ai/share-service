@@ -1,5 +1,13 @@
 {{template "base.html" .}}
 
+{{define "opengraph"}}
+<meta property="og:title" content="{{.Doc.Title}}">
+<meta property="og:description" content="{{.Doc.Format | upper}} document · {{.Doc.SizeBytes | filesize}}{{if .Doc.Project}} · Project: {{.Doc.Project}}{{end}}">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="share.">
+<meta name="twitter:card" content="summary">
+{{end}}
+
 {{define "title"}}{{.Doc.Title}} — share.{{end}}
 
 {{define "body"}}
