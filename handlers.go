@@ -380,27 +380,20 @@ func (h *Handlers) RegisterWeb(mux *http.ServeMux, tmpl *Templates) {
 			return
 		}
 
-		rawURL := fmt.Sprintf("%s/d/%s/raw", h.baseURL, doc.ID)
-		data := map[string]any{
-			"Doc":    doc,
-			"RawURL": rawURL,
+		rendered, err := h.store.ReadRendered(doc.ID, doc.Format)
+		if err != nil {
+			http.Error(w, "internal error", 500)
+			return
 		}
 
+		rawURL := fmt.Sprintf("%s/d/%s/raw", h.baseURL, doc.ID)
+		data := map[string]any{
+			"Doc":          doc,
+			"RenderedHTML": template.HTML(rendered),
+			"RawURL":       rawURL,
+		}
 		if doc.Format == "md" {
-			rendered, err := h.store.ReadRendered(doc.ID)
-			if err != nil {
-				http.Error(w, "internal error", 500)
-				return
-			}
-			data["RenderedHTML"] = template.HTML(rendered)
 			data["HighlightCSS"] = template.CSS(highlightCSS)
-		} else {
-			content, err := h.store.ReadContent(doc.ID, doc.Format)
-			if err != nil {
-				http.Error(w, "internal error", 500)
-				return
-			}
-			data["Content"] = string(content)
 		}
 
 		tmpl.Render(w, "view.html", data)
