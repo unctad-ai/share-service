@@ -560,6 +560,7 @@ body {
 .md-body ul, .md-body ol { padding-left: 1.6em; margin: 0.8em 0; }
 .md-body li { margin: 0.3em 0; }
 .md-body li > ul, .md-body li > ol { margin: 0.2em 0; }
-.md-body input[type="checkbox"] { margin-right: 0.4em; transform: scale(1.15); position: relative; top: 1px; }
+.md-body li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.2em; }
+.md-body input[type="checkbox"] { margin-right: 0.5em; transform: scale(1.2); position: relative; top: 2px; }
 .md-body del { color: var(--stone-600); }
 .md-body strong { font-weight: 600; }
