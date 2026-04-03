@@ -552,3 +552,36 @@ func TestAPIPublishAllowsCleanContent(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", resp.StatusCode, b)
 	}
 }
+
+func TestPublishWithMetadata(t *testing.T) {
+	srv, _ := testServer(t)
+	defer srv.Close()
+
+	body := `{"title":"Test","format":"html","content":"<p>hi</p>","visibility":"public","project":"tz","doc_type":"migration-analysis","tags":"migration,tanzania"}`
+	resp, _ := http.Post(srv.URL+"/api/documents", "application/json", strings.NewReader(body))
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+	id := result["id"].(string)
+
+	// Fetch and verify metadata persisted
+	resp2, _ := http.Get(srv.URL + "/api/documents/" + id)
+	defer resp2.Body.Close()
+	var doc map[string]any
+	json.NewDecoder(resp2.Body).Decode(&doc)
+
+	if doc["project"] != "tz" {
+		t.Errorf("expected project 'tz', got %v", doc["project"])
+	}
+	if doc["doc_type"] != "migration-analysis" {
+		t.Errorf("expected doc_type 'migration-analysis', got %v", doc["doc_type"])
+	}
+	if doc["tags"] != "migration,tanzania" {
+		t.Errorf("expected tags 'migration,tanzania', got %v", doc["tags"])
+	}
+}
