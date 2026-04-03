@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func testStore(t *testing.T) *Store {
@@ -427,4 +428,40 @@ func strPtr(s string) *string { return &s }
 
 func startsWith(s, prefix string) bool {
 	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+}
+
+func TestExpiredDocsExcludedFromList(t *testing.T) {
+	store := testStore(t)
+	defer store.Close()
+
+	store.Create("Old Doc", "html", []byte("<p>old</p>"), "public")
+	old := time.Now().UTC().Add(-91 * 24 * time.Hour).Format(time.RFC3339Nano)
+	store.db.Exec(`UPDATE documents SET created_at = ? WHERE title = 'Old Doc'`, old)
+
+	store.Create("New Doc", "html", []byte("<p>new</p>"), "public")
+
+	docs, total, _ := store.List(1, 20, ListFilter{})
+	if total != 1 {
+		t.Fatalf("expected 1 non-expired doc, got %d", total)
+	}
+	if docs[0].Title != "New Doc" {
+		t.Errorf("expected 'New Doc', got %q", docs[0].Title)
+	}
+}
+
+func TestPinnedDocsNeverExpire(t *testing.T) {
+	store := testStore(t)
+	defer store.Close()
+
+	store.Create("Pinned Old", "html", []byte("<p>pinned</p>"), "public")
+	old := time.Now().UTC().Add(-200 * 24 * time.Hour).Format(time.RFC3339Nano)
+	store.db.Exec(`UPDATE documents SET created_at = ?, pinned = 1 WHERE title = 'Pinned Old'`, old)
+
+	docs, total, _ := store.List(1, 20, ListFilter{})
+	if total != 1 {
+		t.Fatalf("expected 1 pinned doc, got %d", total)
+	}
+	if docs[0].Title != "Pinned Old" {
+		t.Errorf("expected 'Pinned Old', got %q", docs[0].Title)
+	}
 }

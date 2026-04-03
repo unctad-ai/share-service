@@ -321,6 +321,9 @@ func (s *Store) List(page, limit int, filter ListFilter) ([]Document, int, error
 	var where []string
 	var args []any
 	where = append(where, "visibility = 'public'")
+	// Retention: exclude unpinned docs older than 90 days
+	where = append(where, "(pinned = 1 OR created_at > ?)")
+	args = append(args, time.Now().UTC().Add(-90*24*time.Hour).Format(time.RFC3339Nano))
 
 	if filter.Query != "" {
 		where = append(where, "title LIKE ?")
